@@ -8,20 +8,14 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body>
-    <main class="welcome-card">
-      <p class="eyebrow">ERP MAGIC-5</p>
+    <main>
+      <p>ERP MAGIC-5</p>
       <h1>Your workspace starts here.</h1>
-      <p class="intro">
-        The Flask app is ready. Configure Supabase locally to start connecting
-        your data and building features.
+      <p>
+        Create an account to request access. New accounts remain pending until
+        an administrator approves them.
       </p>
-      <section class="next-step" aria-labelledby="next-step-heading">
-        <h2 id="next-step-heading">Next step</h2>
-        <p>
-          Copy <code>.env.example</code> to <code>.env</code> and enter your
-          Supabase project URL and publishable key.
-        </p>
-      </section>
+      <a class="button" href="{{ url_for('register') }}">Register</a>
     </main>
   </body>
 </html>
