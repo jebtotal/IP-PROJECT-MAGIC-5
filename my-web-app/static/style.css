@@ -1,0 +1,56 @@
+
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  display: grid;
+  min-height: 100vh;
+  margin: 0;
+  padding: 2rem 1.5rem;
+  place-items: center;
+}
+
+bottun {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.75rem;
+  background: #1e293b;
+  color: #fff;
+  font-size: 1rem;
+  text-decoration: none;
+}
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 6vw, 2.75rem);
+  letter-spacing: -0.04em;
+}
+
+
+.next-step {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.next-step h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.next-step p {
+  margin: 0.5rem 0 0;
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+code {
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  background: #fff;
+  color: #1e293b;
+}
+

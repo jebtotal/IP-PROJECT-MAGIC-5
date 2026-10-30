@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ERP MAGIC-5 web application">
+    <title>ERP MAGIC-5</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  </head>
+  <body>
+    <main>
+      <p>ERP MAGIC-5</p>
+      <h1>Your workspace starts here.</h1>
+      <p>
+        Create an account to request access. New accounts remain pending until
+        an administrator approves them.
+      </p>
+      <a class="button" href="{{ url_for('register') }}">Register</a>
+    </main>
+  </body>
+</html>
