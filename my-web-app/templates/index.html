@@ -10,12 +10,20 @@
   <body>
     <main>
       <p>ERP MAGIC-5</p>
-      <h1>Your workspace starts here.</h1>
-      <p>
-        Create an account to request access. New accounts remain pending until
-        an administrator approves them.
-      </p>
-      <a class="button" href="{{ url_for('register') }}">Register</a>
+      {% if profile %}
+        <h1>Welcome, {{ profile.full_name or profile.email }}.</h1>
+        <p>You are signed in to your workspace.</p>
+        <form action="{{ url_for('logout') }}" method="post">
+          <button type="submit">Log out</button>
+        </form>
+      {% else %}
+        <h1>Your workspace starts here.</h1>
+        <p>
+          Sign in to your workspace, or create an account to request access.
+        </p>
+        <a class="button" href="{{ url_for('login') }}">Log in</a>
+        <a class="button" href="{{ url_for('register') }}">Register</a>
+      {% endif %}
     </main>
   </body>
 </html>
