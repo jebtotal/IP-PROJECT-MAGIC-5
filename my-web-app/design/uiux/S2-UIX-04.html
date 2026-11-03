@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S2-UIX-04 · Empty, error and confirm-delete states</title>
+<link rel="stylesheet" href="prototype.css">
+</head>
+<body class="wire">
+<main class="page">
+<header class="mast">
+<div>
+<div class="brand">Pentad<span>ERP</span> <small>UI/UX</small>
+</div>
+<p>S2-UIX-04 · UI/UX Designer · Sprint 2</p>
+</div>
+<b class="tag">Wireframe</b>
+</header>
+<h1>Empty, error and confirm-delete states</h1>
+<p class="intro">Task-specific visual deliverable for PentadERP. Screens are design references; they do not imply backend behavior that is not implemented.</p>
+<section class="screens">
+<article class="screen">
+<div class="screen-title">
+<b>Empty catalog</b>
+<span>WIREFRAME</span>
+</div>
+<div class="workspace">
+<aside>Overview<br>
+<br>Customers<br>Products<br>People<br>Sales<br>Reports</aside>
+<main>
+<small>WORKSPACE / EMPTY CATALOG</small>
+<header>
+<div>
+<h3>Empty catalog</h3>
+<p>Search, filter, and review records.</p>
+</div>
+<button>Add record</button>
+</header>
+<div class="filters">
+<span class="input">Search records</span>
+<span class="input">Status: All</span>
+</div>
+<div class="table">
+<div class="thead">
+<span>Name / reference</span>
+<span>Status</span>
+<span>Updated</span>
+<span>Actions</span>
+</div>
+<div>
+<span>C-001 · Acme Corp</span>
+<span>Active</span>
+<span>2026-11-01</span>
+<span>Edit · More</span>
+</div>
+<div>
+<span>C-002 · Globex</span>
+<span>Pending</span>
+<span>2026-10-28</span>
+<span>Edit · More</span>
+</div>
+</div>
+</main>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Validation error</b>
+<span>WIREFRAME</span>
+</div>
+<div class="workspace">
+<aside>Overview<br>
+<br>Customers<br>Products<br>People<br>Sales<br>Reports</aside>
+<main>
+<small>WORKSPACE / VALIDATION ERROR</small>
+<header>
+<div>
+<h3>Validation error</h3>
+<p>Search, filter, and review records.</p>
+</div>
+<button>Add record</button>
+</header>
+<div class="filters">
+<span class="input">Search records</span>
+<span class="input">Status: All</span>
+</div>
+<div class="table">
+<div class="thead">
+<span>Name / reference</span>
+<span>Status</span>
+<span>Updated</span>
+<span>Actions</span>
+</div>
+<div>
+<span>C-001 · Acme Corp</span>
+<span>Active</span>
+<span>2026-11-01</span>
+<span>Edit · More</span>
+</div>
+<div>
+<span>C-002 · Globex</span>
+<span>Pending</span>
+<span>2026-10-28</span>
+<span>Edit · More</span>
+</div>
+</div>
+</main>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Confirm soft delete</b>
+<span>WIREFRAME</span>
+</div>
+<div class="overlay">
+<div class="dialog">
+<h3>Confirm soft delete</h3>
+<p>Review the selected record and available permissions.</p>
+<div class="table">
+<div>Module　　View　Add　Edit　Delete</div>
+<div>Customers　☑　☑　☑　☐</div>
+<div>Products　　☑　☑　☐　☐</div>
+</div>
+<footer>
+<button class="secondary">Cancel</button>
+<button>Save changes</button>
+</footer>
+</div>
+</div>
+</article>
+</section>
+<section class="handoff">
+<h2>Design rationale and handoff</h2>
+<ul>
+<li>Distinguish no records from no results caused by active filters.</li>
+<li>Explain errors in text and preserve valid form values.</li>
+<li>Name the record and explain that deletion marks it inactive.</li>
+</ul>
+</section>
+<footer>S2-UIX-04 · PentadERP design deliverable</footer>
+</main>
+</body>
+</html>
