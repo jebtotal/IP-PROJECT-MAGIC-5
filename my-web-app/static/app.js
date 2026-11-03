@@ -608,9 +608,17 @@
     }
 
     function softDeletePrice(code, date) {
-      const list = getPrices();
-      const idx = list.findIndex(p => p.prodCode === code && p.effDate === date);
-      if (idx >= 0) { list[idx].isDeleted = true; savePrices(list); renderPriceHistoryContent(); renderProducts(); }
+      showConfirmModal('Mark Price Inactive', `Mark the ${date} price for ${code} as inactive? It will remain in price history.`, () => {
+        const list = getPrices();
+        const idx = list.findIndex(p => p.prodCode === code && p.effDate === date);
+        if (idx >= 0) {
+          list[idx].isDeleted = true;
+          savePrices(list);
+          renderPriceHistoryContent();
+          renderProducts();
+          showToast('Price entry marked inactive.', 'success');
+        }
+      });
     }
 
     // HR Module Stores
