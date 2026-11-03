@@ -1,35 +1,51 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Register for ERP MAGIC-5">
-    <title>Register | ERP MAGIC-5</title>
+    <meta name="description" content="Create a PentadERP account">
+    <title>Register | PentadERP</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="{{ url_for('static', filename='tailwind-config.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='register.js') }}" defer></script>
   </head>
-  <body>
-    <main>
-      <p>ERP MAGIC-5</p>
-      <h1>Create an account</h1>
-      <p>
-        Your account will be pending until an administrator approves your access.
-      </p>
-      <form id="register-form">
-        <label for="full_name">Full name</label>
-        <input id="full_name" name="full_name" autocomplete="name" maxlength="120" required>
-
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
-
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
-        <p>Use at least 8 characters.</p>
-
-        <button type="submit">Register</button>
-        <p id="form-message" role="status" aria-live="polite"></p>
-      </form>
-      <p><a href="{{ url_for('index') }}">Back to home</a></p>
+  <body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+    <main class="flex flex-1 items-center justify-center px-6 py-12">
+      <section class="glass-panel w-full max-w-md rounded-3xl bg-white/80 p-8 shadow-2xl dark:bg-slate-900/80">
+        <a href="{{ url_for('index') }}" class="mb-8 flex items-center gap-3 font-black text-xl tracking-tight text-gray-900 dark:text-white">
+          <span class="pentad-logo h-8 w-8 shrink-0"></span>
+          <span>Pentad<span class="text-brand-500">ERP</span></span>
+        </a>
+        <h1 class="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Create an account</h1>
+        <p class="mb-6 mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Submit a request to join the workspace. Your account will be pending until approved.
+        </p>
+        <form id="register-form" class="space-y-4">
+          <div>
+            <label for="full_name" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Full name</label>
+            <input id="full_name" name="full_name" autocomplete="name" maxlength="120" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white">
+          </div>
+          <div>
+            <label for="email" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Email address</label>
+            <input id="email" name="email" type="email" autocomplete="email" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white">
+          </div>
+          <div>
+            <label for="password" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">Password</label>
+            <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white">
+            <p class="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Use at least 8 characters.</p>
+          </div>
+          <button type="submit" class="w-full rounded-xl bg-brand-600 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-brand-600/25 transition-colors hover:bg-brand-500">Register</button>
+          <p id="form-message" role="status" aria-live="polite" class="text-xs text-gray-500 dark:text-gray-400"></p>
+        </form>
+        <p class="mt-6 text-center text-xs text-gray-500 dark:text-gray-400">
+          Already registered? <a href="{{ url_for('login') }}" class="font-bold text-brand-500 hover:underline">Sign in</a>
+        </p>
+      </section>
     </main>
   </body>
-  
 </html>
