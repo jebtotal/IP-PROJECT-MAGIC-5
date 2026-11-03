@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S1-UIX-05 · Usability review of built screens and fix list</title>
+<link rel="stylesheet" href="prototype.css">
+</head>
+<body class="review">
+<main class="page">
+<header class="mast">
+<div>
+<div class="brand">Pentad<span>ERP</span> <small>UI/UX</small>
+</div>
+<p>S1-UIX-05 · UI/UX Designer · Sprint 1</p>
+</div>
+<b class="tag">Review</b>
+</header>
+<h1>Usability review of built screens and fix list</h1>
+<p class="intro">Task-specific visual deliverable for PentadERP. Screens are design references; they do not imply backend behavior that is not implemented.</p>
+<section class="screens">
+<article class="screen">
+<div class="screen-title">
+<b>Authentication review</b>
+<span>REVIEW</span>
+</div>
+<div class="workspace">
+<aside>Overview<br>
+<br>Customers<br>Products<br>People<br>Sales<br>Reports</aside>
+<main>
+<small>WORKSPACE / AUTHENTICATION REVIEW</small>
+<header>
+<div>
+<h3>Authentication review</h3>
+<p>Search, filter, and review records.</p>
+</div>
+<button>Add record</button>
+</header>
+<div class="filters">
+<span class="input">Search records</span>
+<span class="input">Status: All</span>
+</div>
+<div class="table">
+<div class="thead">
+<span>Name / reference</span>
+<span>Status</span>
+<span>Updated</span>
+<span>Actions</span>
+</div>
+<div>
+<span>C-001 · Acme Corp</span>
+<span>Active</span>
+<span>2026-11-01</span>
+<span>Edit · More</span>
+</div>
+<div>
+<span>C-002 · Globex</span>
+<span>Pending</span>
+<span>2026-10-28</span>
+<span>Edit · More</span>
+</div>
+</div>
+</main>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Landing and workspace review</b>
+<span>REVIEW</span>
+</div>
+<div class="landing">
+<nav>PentadERP <span>Modules　 Pricing　 About　 <button>Sign in</button>
+</span>
+</nav>
+<section>
+<small>ENTERPRISE RESOURCE PLANNING</small>
+<h3>Executive control,<br>reimagined.</h3>
+<p>Landing and workspace review: discover connected business operations.</p>
+<button>Get started</button>
+<div class="tiles">
+<div>Customers</div>
+<div>Products</div>
+<div>People</div>
+</div>
+</section>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Rights dialog review</b>
+<span>REVIEW</span>
+</div>
+<div class="overlay">
+<div class="dialog">
+<h3>Rights dialog review</h3>
+<p>Review the selected record and available permissions.</p>
+<div class="table">
+<div>Module　　View　Add　Edit　Delete</div>
+<div>Customers　☑　☑　☑　☐</div>
+<div>Products　　☑　☑　☐　☐</div>
+</div>
+<footer>
+<button class="secondary">Cancel</button>
+<button>Save changes</button>
+</footer>
+</div>
+</div>
+</article>
+</section>
+<section class="handoff">
+<h2>Design rationale and handoff</h2>
+<ul>
+<li>Medium: auth labels are very small; align to the body/label scale.</li>
+<li>Medium: no recovery link is provided; recovery is blocked on a backend endpoint.</li>
+<li>Low: verify dialog keyboard focus and return-focus behavior before release.</li>
+</ul>
+</section>
+<footer>S1-UIX-05 · PentadERP design deliverable</footer>
+</main>
+</body>
+</html>
