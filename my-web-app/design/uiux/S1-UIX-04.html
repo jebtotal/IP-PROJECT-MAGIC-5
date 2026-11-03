@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S1-UIX-04 · Hi-fi mockups and handoff: auth and main page</title>
+<link rel="stylesheet" href="prototype.css">
+</head>
+<body class="polished">
+<main class="page">
+<header class="mast">
+<div>
+<div class="brand">Pentad<span>ERP</span> <small>UI/UX</small>
+</div>
+<p>S1-UIX-04 · UI/UX Designer · Sprint 1</p>
+</div>
+<b class="tag">Hifi</b>
+</header>
+<h1>Hi-fi mockups and handoff: auth and main page</h1>
+<p class="intro">Task-specific visual deliverable for PentadERP. Screens are design references; they do not imply backend behavior that is not implemented.</p>
+<section class="screens">
+<article class="screen">
+<div class="screen-title">
+<b>Sign in</b>
+<span>HIFI</span>
+</div>
+<div class="auth">
+<div class="logo">Pentad<span>ERP</span>
+</div>
+<h3>Sign in</h3>
+<label>Email address<span class="input">Enter email address</span>
+</label>
+<label>Password<span class="input">Enter password</span>
+</label>
+<button>Continue</button>
+<small>Feedback and recovery links</small>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Register</b>
+<span>HIFI</span>
+</div>
+<div class="auth">
+<div class="logo">Pentad<span>ERP</span>
+</div>
+<h3>Register</h3>
+<label>Email address<span class="input">Enter email address</span>
+</label>
+<label>Password<span class="input">Enter password</span>
+</label>
+<button>Continue</button>
+<small>Feedback and recovery links</small>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Main page</b>
+<span>HIFI</span>
+</div>
+<div class="landing">
+<nav>PentadERP <span>Modules　 Pricing　 About　 <button>Sign in</button>
+</span>
+</nav>
+<section>
+<small>ENTERPRISE RESOURCE PLANNING</small>
+<h3>Executive control,<br>reimagined.</h3>
+<p>Main page: discover connected business operations.</p>
+<button>Get started</button>
+<div class="tiles">
+<div>Customers</div>
+<div>Products</div>
+<div>People</div>
+</div>
+</section>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>User Management</b>
+<span>HIFI</span>
+</div>
+<div class="workspace">
+<aside>Overview<br>
+<br>Customers<br>Products<br>People<br>Sales<br>Reports</aside>
+<main>
+<small>WORKSPACE / USER MANAGEMENT</small>
+<header>
+<div>
+<h3>User Management</h3>
+<p>Search, filter, and review records.</p>
+</div>
+<button>Add record</button>
+</header>
+<div class="filters">
+<span class="input">Search records</span>
+<span class="input">Status: All</span>
+</div>
+<div class="table">
+<div class="thead">
+<span>Name / reference</span>
+<span>Status</span>
+<span>Updated</span>
+<span>Actions</span>
+</div>
+<div>
+<span>C-001 · Acme Corp</span>
+<span>Active</span>
+<span>2026-11-01</span>
+<span>Edit · More</span>
+</div>
+<div>
+<span>C-002 · Globex</span>
+<span>Pending</span>
+<span>2026-10-28</span>
+<span>Edit · More</span>
+</div>
+</div>
+</main>
+</div>
+</article>
+<article class="screen">
+<div class="screen-title">
+<b>Rights dialog</b>
+<span>HIFI</span>
+</div>
+<div class="overlay">
+<div class="dialog">
+<h3>Rights dialog</h3>
+<p>Review the selected record and available permissions.</p>
+<div class="table">
+<div>Module　　View　Add　Edit　Delete</div>
+<div>Customers　☑　☑　☑　☐</div>
+<div>Products　　☑　☑　☐　☐</div>
+</div>
+<footer>
+<button class="secondary">Cancel</button>
+<button>Save changes</button>
+</footer>
+</div>
+</div>
+</article>
+</section>
+<section class="handoff">
+<h2>Design rationale and handoff</h2>
+<ul>
+<li>Preserve a clear keyboard focus state and practical touch targets.</li>
+<li>Dialogs retain context, label permissions, and return focus to their trigger.</li>
+<li>Auth handoff uses the existing Flask routes and shared design tokens.</li>
+</ul>
+</section>
+<footer>S1-UIX-04 · PentadERP design deliverable</footer>
+</main>
+</body>
+</html>
