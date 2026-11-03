@@ -1,29 +1,718 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="ERP MAGIC-5 web application">
-    <title>ERP MAGIC-5</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
-    <main>
-      <p>ERP MAGIC-5</p>
-      {% if profile %}
-        <h1>Welcome, {{ profile.full_name or profile.email }}.</h1>
-        <p>You are signed in to your workspace.</p>
-        <form action="{{ url_for('logout') }}" method="post">
-          <button type="submit">Log out</button>
-        </form>
-      {% else %}
-        <h1>Your workspace starts here.</h1>
-        <p>
-          Sign in to your workspace, or create an account to request access.
-        </p>
-        <a class="button" href="{{ url_for('login') }}">Log in</a>
-        <a class="button" href="{{ url_for('register') }}">Register</a>
-      {% endif %}
-    </main>
-  </body>
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PentadERP – Executive Business Management Suite</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="{{ url_for('static', filename='tailwind-config.js') }}"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Google Fonts & FontAwesome CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white" data-user-email="{{ profile.email if profile else '' }}" data-user-name="{{ (profile.full_name or profile.email) if profile else '' }}" data-login-url="{{ url_for('login') }}" data-register-url="{{ url_for('register') }}" data-set-password-url="{{ url_for('set_password') }}">
+
+  <!-- ==================== TOAST & CONFIRM MODALS ==================== -->
+  <div id="toastContainer" class="fixed top-24 right-6 z-[300] flex flex-col gap-3 pointer-events-none"></div>
+
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-7 shadow-2xl relative">
+      <div class="flex items-center gap-4 mb-4 text-amber-500 dark:text-amber-400">
+        <div class="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-xl shrink-0 border border-amber-500/20">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div>
+          <h3 id="confirmTitle" class="text-lg font-bold text-gray-900 dark:text-white">Confirm Action</h3>
+          <p id="confirmMessage" class="text-xs text-gray-500 dark:text-gray-400 mt-1">Are you sure you want to proceed?</p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-6">
+        <button id="confirmCancelBtn" class="px-4 py-2 text-xs font-bold rounded-xl border border-gray-200 dark:border-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          Cancel
+        </button>
+        <button id="confirmOkBtn" class="px-4 py-2 text-xs font-bold rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition-all">
+          Proceed
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== LANDING PAGE ==================== -->
+  <div id="landing" class="{{ 'hidden ' if profile else '' }}flex-1 flex flex-col">
+    <!-- Navbar -->
+    <nav class="sticky top-0 z-50 glass-panel border-b border-gray-200/50 dark:border-gray-800/50 bg-white/70 dark:bg-slate-950/70">
+      <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <a href="#" class="flex items-center gap-3.5 font-black text-xl tracking-tight text-gray-900 dark:text-white">
+          <div class="pentad-logo w-8 h-8 shrink-0"></div>
+          <span class="font-extrabold leading-none">Pentad<span class="text-brand-500">ERP</span></span>
+        </a>
+
+        <div class="hidden md:flex items-center gap-8 text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-400">
+          <a href="#features" class="hover:text-brand-500 transition-colors">Core Modules</a>
+          <a href="#pricing" class="hover:text-brand-500 transition-colors">Pricing Matrix</a>
+          <a href="#architecture" class="hover:text-brand-500 transition-colors">RBAC Governance</a>
+          <a href="#about" class="hover:text-brand-500 transition-colors">About</a>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button onclick="toggleTheme()" class="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
+            <i class="fa-solid fa-moon dark:hidden text-sm"></i>
+            <i class="fa-solid fa-sun hidden dark:block text-amber-400 text-sm"></i>
+          </button>
+          <button onclick="openModal('login')" class="px-4 py-2.5 text-xs font-bold text-gray-700 dark:text-gray-200 hover:text-brand-500 transition-colors">
+            Sign In
+          </button>
+          <button onclick="openModal('register')" class="px-5 py-2.5 text-xs font-bold text-white bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 rounded-xl shadow-lg shadow-brand-600/25 transition-all hover:-translate-y-0.5">
+            Get Started
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="relative py-24 lg:py-32 overflow-hidden">
+      <!-- Glow background blob -->
+      <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[350px] bg-brand-500/10 dark:bg-brand-500/20 rounded-full blur-[120px] pointer-events-none"></div>
+
+      <div class="max-w-4xl mx-auto px-6 flex flex-col items-center text-center gap-14 relative z-10">
+        <div>
+          <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-bold bg-brand-500/10 text-brand-600 dark:text-brand-400 mb-6 border border-brand-500/20">
+            <span class="w-2 h-2 rounded-full bg-brand-500 animate-pulse"></span>
+            Enterprise Grade ERP System
+          </div>
+          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white leading-[1.1] tracking-tight mb-6">
+            Executive Control <span class="text-transparent bg-clip-text bg-gradient-to-r from-brand-500 via-indigo-400 to-sky-400">Reimagined.</span>
+          </h1>
+          <p class="text-base sm:text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto leading-relaxed">
+            Consolidate Customer CRM, Inventory Catalogs, Effective Price Histories, Payroll HR, and Sales Analytics into one executive platform.
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-4">
+            <button onclick="openModal('login')" class="px-6 py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider text-white bg-brand-600 hover:bg-brand-500 shadow-xl shadow-brand-600/30 transition-all hover:-translate-y-0.5 flex items-center gap-2">
+              <span>Launch Live Portal</span>
+              <i class="fa-solid fa-arrow-right text-xs"></i>
+            </button>
+            <button onclick="openModal('login')" class="px-6 py-3.5 rounded-2xl font-bold text-xs uppercase tracking-wider text-gray-700 dark:text-gray-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-slate-850 shadow-md transition-all">
+              Sign in to explore
+            </button>
+          </div>
+        </div>
+
+        <div class="relative w-full max-w-2xl text-left">
+          <div class="glass-panel p-5 rounded-3xl shadow-2xl glow-hover bg-white/80 dark:bg-slate-900/80">
+            <div class="flex items-center justify-between pb-4 mb-4 border-b border-gray-100 dark:border-gray-800">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500/80"></span>
+                <span class="w-3 h-3 rounded-full bg-amber-500/80"></span>
+                <span class="w-3 h-3 rounded-full bg-emerald-500/80"></span>
+                <span class="text-xs font-bold text-gray-400 ml-2">PentadERP Suite Console</span>
+              </div>
+              <span class="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Operational</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <div class="p-4 rounded-2xl bg-gray-50 dark:bg-slate-950/60 border border-gray-200/50 dark:border-gray-800/50">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Monthly Revenue</div>
+                <div class="text-2xl font-black text-gray-900 dark:text-white mt-1">$84,250.00</div>
+                <div class="text-[11px] font-bold text-emerald-500 mt-1">↑ +18.4% growth</div>
+              </div>
+              <div class="p-4 rounded-2xl bg-gray-50 dark:bg-slate-950/60 border border-gray-200/50 dark:border-gray-800/50">
+                <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Order Pipeline</div>
+                <div class="text-2xl font-black text-gray-900 dark:text-white mt-1">94 Sales</div>
+                <div class="text-[11px] font-bold text-brand-500 mt-1">Ready for dispatch</div>
+              </div>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-slate-900 text-white flex items-center justify-between border border-gray-800">
+              <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400 font-bold">
+                  <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold">Audit-Backed Soft Delete</div>
+                  <div class="text-[10px] text-gray-400">Role-based controls & history logs</div>
+                </div>
+              </div>
+              <i class="fa-solid fa-check text-emerald-400"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="py-20 border-t border-gray-200/60 dark:border-gray-800/60 "><div class="max-w-7xl mx-auto px-6"><div class="text-center max-w-xl mx-auto mb-12"><h2 class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-3">Everything you need to grow</h2><p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Four core modules. Three user roles. One unified system.</p></div><div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"><div class="glass-panel p-7 rounded-3xl text-center glow-hover"><div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl"><i class="fa-solid fa-address-book"></i></div><h3 class="font-bold text-gray-900 dark:text-white mb-2">Customer Management</h3><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Track accounts, addresses, and payment terms in one place.</p></div><div class="glass-panel p-7 rounded-3xl text-center glow-hover"><div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl"><i class="fa-solid fa-boxes-stacked"></i></div><h3 class="font-bold text-gray-900 dark:text-white mb-2">Product Management</h3><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Maintain the product catalog with effective-dated price histories.</p></div><div class="glass-panel p-7 rounded-3xl text-center glow-hover"><div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl"><i class="fa-solid fa-id-card"></i></div><h3 class="font-bold text-gray-900 dark:text-white mb-2">Human Resources</h3><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Employees, jobs, departments, and job history with salary records.</p></div><div class="glass-panel p-7 rounded-3xl text-center glow-hover"><div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-brand-500/10 text-brand-500 flex items-center justify-center text-xl"><i class="fa-solid fa-cart-shopping"></i></div><h3 class="font-bold text-gray-900 dark:text-white mb-2">Sales Management</h3><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Transactions, line items, and live sales totals from current prices.</p></div></div></div></section>
+
+    <!-- Pricing Matrix -->
+    <section id="pricing" class="py-20 border-t border-gray-200/60 dark:border-gray-800/60 bg-gray-50/50 dark:bg-slate-950/50">
+      <div class="max-w-7xl mx-auto px-6">
+        <div class="text-center max-w-xl mx-auto mb-12">
+          <h2 class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-3">Enterprise Tier Plans</h2>
+          <p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-6">Select your team scale with complete RBAC rights control.</p>
+
+          <div class="inline-flex items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 shadow-sm">
+            <button id="btnMonthly" onclick="setBillingCycle('monthly')" class="px-4 py-2 rounded-xl text-xs font-bold bg-brand-600 text-white shadow">Monthly</button>
+            <button id="btnAnnual" onclick="setBillingCycle('annual')" class="px-4 py-2 rounded-xl text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white">Annual <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 font-bold ml-1">Save 20%</span></button>
+          </div>
+        </div>
+
+        <div class="grid md:grid-cols-3 gap-8">
+          <!-- Starter -->
+          <div class="glass-panel p-8 rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 flex flex-col glow-hover">
+            <h3 class="text-base font-bold text-gray-900 dark:text-white">Starter Ops</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-6">Essential CRM & Inventory for growing setups.</p>
+            <div class="text-4xl font-black text-gray-900 dark:text-white mb-6">
+              <span id="priceStarter">$49</span><span class="text-xs font-bold text-gray-400">/mo</span>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-600 dark:text-gray-300 mb-8 flex-1">
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Up to 5 Active Accounts</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Customer CRM Module</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Standard Sales Pipeline</li>
+            </ul>
+            <button onclick="openModal('register')" class="w-full py-3 rounded-xl border border-brand-500 text-brand-500 hover:bg-brand-500/10 text-xs font-bold uppercase tracking-wider transition-all">Select Starter</button>
+          </div>
+
+          <!-- Business Pro -->
+          <div class="glass-panel p-8 rounded-3xl bg-white dark:bg-slate-900 border-2 border-brand-500 flex flex-col relative glow-hover shadow-2xl">
+            <span class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-brand-600 text-white shadow-lg">Popular Choice</span>
+            <h3 class="text-base font-bold text-gray-900 dark:text-white">Business Pro</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-6">Complete suite including HR & Price Histories.</p>
+            <div class="text-4xl font-black text-gray-900 dark:text-white mb-6">
+              <span id="pricePro">$149</span><span class="text-xs font-bold text-gray-400">/mo</span>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-600 dark:text-gray-300 mb-8 flex-1">
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Up to 25 Accounts</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Effective Unit Price History Logs</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> HR Employees & Job Roster</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Printable Custom Reports & PDF</li>
+            </ul>
+            <button onclick="openModal('register')" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold uppercase tracking-wider shadow-lg shadow-brand-600/30 transition-all">Start Business Pro</button>
+          </div>
+
+          <!-- Enterprise -->
+          <div class="glass-panel p-8 rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 flex flex-col glow-hover">
+            <h3 class="text-base font-bold text-gray-900 dark:text-white">Enterprise Suite</h3>
+            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 mb-6">Custom rights matrix and unlimited capacity.</p>
+            <div class="text-4xl font-black text-gray-900 dark:text-white mb-6">
+              <span id="priceEnterprise">$399</span><span class="text-xs font-bold text-gray-400">/mo</span>
+            </div>
+            <ul class="space-y-3 text-xs text-gray-600 dark:text-gray-300 mb-8 flex-1">
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Unlimited User Accounts</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Custom Permission Matrix (RBAC)</li>
+              <li class="flex items-center gap-2.5"><i class="fa-solid fa-circle-check text-emerald-500"></i> Soft-delete Audit Recovery</li>
+            </ul>
+            <button onclick="openModal('login')" class="w-full py-3 rounded-xl border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-bold uppercase tracking-wider transition-all">Launch Enterprise</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="architecture" class="py-20 border-t border-gray-200/60 dark:border-gray-800/60 bg-gray-50/50 dark:bg-slate-950/50"><div class="max-w-7xl mx-auto px-6"><div class="text-center max-w-xl mx-auto mb-12"><h2 class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-3">RBAC Governance</h2><p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400">Role-based access control keeps every module and action accountable.</p></div><div class="grid md:grid-cols-3 gap-6"><div class="glass-panel p-7 rounded-3xl glow-hover"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500">Superadmin</span><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-4">Full system access. Manages every module and assigns roles to any user.</p></div><div class="glass-panel p-7 rounded-3xl glow-hover"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-500">Admin</span><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-4">Manages most modules and user rights, except Superadmin accounts.</p></div><div class="glass-panel p-7 rounded-3xl glow-hover"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/10 text-emerald-500">User</span><p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mt-4">Works only in the modules and actions (view, add, edit, delete) granted by an Admin.</p></div></div><p class="text-center text-xs text-gray-500 dark:text-gray-400 mt-8"><i class="fa-solid fa-shield-halved text-brand-500 mr-1"></i> Deletes are soft deletes with an audit trail, so records stay recoverable.</p></div></section>
+
+    <section id="about" class="py-20 border-t border-gray-200/60 dark:border-gray-800/60 "><div class="max-w-7xl mx-auto px-6"><div class="text-center max-w-xl mx-auto mb-12"><h2 class="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white mb-3">About PentadERP</h2><p class="text-xs sm:text-sm text-gray-500 dark:text-gray-400"></p></div><p class="max-w-2xl mx-auto -mt-6 text-center text-sm text-gray-600 dark:text-gray-400 leading-relaxed">PentadERP is an Enterprise Resource Planning web system built for an Information Management project. It brings Customers, Products, Human Resources, Sales, and Reports into one platform, with role-based access so each user only sees and does what they are permitted to. Sign in with a demo account to explore it.</p></div></section>
+
+    <!-- Footer -->
+    <footer class="mt-auto py-8 bg-white dark:bg-slate-950 border-t border-gray-200/60 dark:border-gray-800/60 text-center text-xs text-gray-500">
+      <p>© 2026 PentadERP Enterprise Systems. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <!-- ==================== DASHBOARD EXECUTIVE LAYOUT ==================== -->
+  <div id="dashboard" class="{{ '' if profile else 'hidden ' }}min-h-screen flex flex-col">
+    <div class="flex flex-1 overflow-hidden">
+
+      <!-- Executive Sidebar -->
+      <aside id="sidebar" class="w-72 bg-slate-950 text-gray-400 flex flex-col transition-all duration-300 z-40 fixed md:relative inset-y-0 left-0 -translate-x-full md:translate-x-0 border-r border-gray-800/60">
+        <div class="h-20 px-6 flex items-center justify-between border-b border-gray-800/60">
+          <a href="#" class="flex items-center gap-3 font-black text-lg text-white">
+            <div class="pentad-logo w-8 h-8 shrink-0"></div>
+            <span class="leading-none">Pentad<span class="text-brand-400">ERP</span></span>
+          </a>
+          <button onclick="toggleMobileSidebar()" class="md:hidden text-gray-400 hover:text-white">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <nav class="flex-1 px-4 py-6 space-y-6 overflow-y-auto" id="sidebarNav">
+          <!-- Populated by JS -->
+        </nav>
+
+        <div class="p-4 border-t border-gray-800/60">
+          <div class="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-900 border border-gray-800/80 hover:bg-slate-850 transition-colors cursor-pointer" onclick="logout()">
+            <div id="userAvatar" class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow">
+              U
+            </div>
+            <div class="flex-1 min-w-0">
+              <p id="userName" class="text-xs font-bold text-white truncate">User Name</p>
+              <p id="userRoleLabel" class="text-[10px] text-brand-400 uppercase font-extrabold tracking-wider">ROLE</p>
+            </div>
+            <button title="Logout" class="text-gray-400 hover:text-red-400 p-1">
+              <i class="fa-solid fa-right-from-bracket text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Main Layout -->
+      <div class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950">
+
+        <header class="h-20 glass-panel bg-white/80 dark:bg-slate-900/80 px-6 sm:px-8 flex items-center justify-between shrink-0 z-30 border-b border-gray-200/50 dark:border-gray-800/50">
+          <div class="flex items-center gap-4">
+            <button onclick="toggleMobileSidebar()" class="md:hidden p-2 rounded-xl text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <h1 id="pageTitle" class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Dashboard Overview</h1>
+          </div>
+
+          <div class="flex items-center gap-4">
+            <span id="roleBadge" class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">
+              User
+            </span>
+
+            <button onclick="toggleTheme()" class="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <i class="fa-solid fa-moon dark:hidden text-sm"></i>
+              <i class="fa-solid fa-sun hidden dark:block text-amber-400 text-sm"></i>
+            </button>
+          </div>
+        </header>
+
+        <main id="contentArea" class="flex-1 p-6 sm:p-8 overflow-y-auto">
+          <!-- Views rendered by JS -->
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== AUTH MODALS ==================== -->
+
+  <!-- CUSTOMER MODAL -->
+  <div id="customerModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative">
+      <button onclick="closeCustomerModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="customerModalTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Customer</h2>
+
+      <form id="customerForm" onsubmit="saveCustomer(event)" class="space-y-4">
+        <input type="hidden" id="custEditNo" value="" />
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Cust No.</label>
+          <input type="text" id="custNo" required placeholder="C-001" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Company / Customer Name</label>
+          <input type="text" id="custName" required placeholder="Acme Corp" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Address</label>
+          <input type="text" id="custAddress" required placeholder="123 Corporate Blvd" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Pay Terms</label>
+          <input type="text" id="custPayterms" required placeholder="Net 30, COD" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Customer</button>
+          <button type="button" onclick="closeCustomerModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PRODUCT MODAL -->
+  <div id="productModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative">
+      <button onclick="closeProductModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="productModalTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Product</h2>
+
+      <form id="productForm" onsubmit="saveProduct(event)" class="space-y-4">
+        <input type="hidden" id="prodEditCode" value="" />
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Product Code</label>
+          <input type="text" id="prodCode" required placeholder="P-001" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Description</label>
+          <input type="text" id="prodDesc" required placeholder="Industrial Widget A" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Unit Measure</label>
+          <input type="text" id="prodUnit" required placeholder="pcs, box, can" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Product</button>
+          <button type="button" onclick="closeProductModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- PRICE HISTORY MODAL -->
+  <div id="priceHistModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-8 shadow-2xl relative">
+      <button onclick="closePriceHistModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="priceHistTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-1">Price History</h2>
+
+      <div id="priceHistToolbar" class="flex items-center justify-between gap-4 mb-4 mt-4"></div>
+
+      <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 max-h-72">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 dark:bg-slate-950 text-gray-400 uppercase font-bold sticky top-0">
+            <tr>
+              <th class="p-3">Effective Date</th>
+              <th class="p-3">Unit Price</th>
+              <th class="p-3">Status</th>
+              <th class="p-3">Stamp Log</th>
+              <th class="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="priceHistBody" class="divide-y divide-gray-200 dark:divide-gray-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD PRICE MODAL -->
+  <div id="priceModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closePriceModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="priceModalTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Price</h2>
+
+      <form id="priceForm" onsubmit="savePrice(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Product Code</label>
+          <input type="text" id="priceProdCode" readonly class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-slate-950 text-gray-400 text-xs font-bold" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Effective Date</label>
+          <input type="date" id="priceEffDate" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Unit Price ($)</label>
+          <input type="number" id="priceUnitPrice" step="0.01" min="0" required placeholder="0.00" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Price</button>
+          <button type="button" onclick="closePriceModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EMP MODAL -->
+  <div id="empModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative">
+      <button onclick="closeEmpModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="empModalTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Employee</h2>
+
+      <form id="empForm" onsubmit="saveEmployee(event)" class="space-y-4">
+        <input type="hidden" id="empEditNo" value="" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Emp No.</label>
+            <input type="text" id="empNo" required placeholder="E-001" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Gender</label>
+            <select id="empGender" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="M">Male</option>
+              <option value="F">Female</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">First Name</label>
+            <input type="text" id="empFirst" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Last Name</label>
+            <input type="text" id="empLast" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Birth Date</label>
+            <input type="date" id="empBirth" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Hire Date</label>
+            <input type="date" id="empHire" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Separation Date (Optional)</label>
+          <input type="date" id="empSep" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Employee</button>
+          <button type="button" onclick="closeEmpModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JOB HIST LIST MODAL -->
+  <div id="jhListModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-8 shadow-2xl relative">
+      <button onclick="closeJhListModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="jhListTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-1">Job History</h2>
+
+      <div id="jhListToolbar" class="flex items-center justify-between gap-4 mb-4 mt-4"></div>
+
+      <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 max-h-72">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 dark:bg-slate-950 text-gray-400 uppercase font-bold sticky top-0">
+            <tr id="jhListHead"></tr>
+          </thead>
+          <tbody id="jhListBody" class="divide-y divide-gray-200 dark:divide-gray-800"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- JH FORM MODAL -->
+  <div id="jhFormModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closeJhFormModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="jhFormTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Job History</h2>
+
+      <form id="jhForm" onsubmit="saveJobHistory(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Emp No.</label>
+          <input type="text" id="jhEmpNo" readonly class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-slate-950 text-gray-400 text-xs font-bold" />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Effective Date</label>
+            <input type="date" id="jhEffDate" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Salary ($)</label>
+            <input type="number" id="jhSalary" step="0.01" min="0" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Job Role</label>
+          <select id="jhJobCode" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Department</label>
+          <select id="jhDeptCode" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Assignment</button>
+          <button type="button" onclick="closeJhFormModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JOB / DEPARTMENT MODAL -->
+  <div id="simpleModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closeModal('simple')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <h2 id="smTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Job</h2>
+      <form onsubmit="saveSimple(event)" class="space-y-4">
+        <input type="hidden" id="smKind" /><input type="hidden" id="smEdit" />
+        <div><label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Code</label><input id="smCode" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500/40" /></div>
+        <div><label id="smNameLbl" class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Name</label><input id="smName" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500/40" /></div>
+        <div class="flex items-center gap-3 pt-4"><button type="submit" class="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save</button><button type="button" onclick="closeModal('simple')" class="px-5 py-3 border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- EMPLOYEE PROFILE MODAL -->
+  <div id="profileModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+      <button onclick="closeModal('profile')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200"><i class="fa-solid fa-xmark text-lg"></i></button>
+      <div id="profileBody"></div>
+    </div>
+  </div>
+
+  <!-- SALES HEADER MODAL -->
+  <div id="salesModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closeSalesModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="salesModalTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">New Transaction</h2>
+
+      <form id="salesForm" onsubmit="saveSale(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Trans No.</label>
+          <input type="text" id="salesTransNo" required placeholder="T-001" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Sales Date</label>
+          <input type="date" id="salesDate" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Customer</label>
+          <select id="salesCustNo" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Sales Representative</label>
+          <select id="salesEmpNo" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Sale</button>
+          <button type="button" onclick="closeSalesModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SD LIST MODAL -->
+  <div id="sdListModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-3xl w-full p-8 shadow-2xl relative">
+      <button onclick="closeSdListModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="sdListTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-1">Sale Details</h2>
+
+      <div id="sdListToolbar" class="flex items-center justify-between gap-4 mb-4 mt-4"></div>
+
+      <div class="overflow-x-auto rounded-2xl border border-gray-200 dark:border-gray-800 max-h-72 mb-4">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-gray-100 dark:bg-slate-950 text-gray-400 uppercase font-bold sticky top-0">
+            <tr id="sdListHead"></tr>
+          </thead>
+          <tbody id="sdListBody" class="divide-y divide-gray-200 dark:divide-gray-800"></tbody>
+        </table>
+      </div>
+
+      <div id="sdListTotal" class="text-right text-lg font-black text-brand-500"></div>
+    </div>
+  </div>
+
+  <!-- SD FORM MODAL -->
+  <div id="sdFormModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closeSdFormModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="sdFormTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">Add Line Item</h2>
+
+      <form id="sdForm" onsubmit="saveSalesDetail(event)" class="space-y-4">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Trans No.</label>
+          <input type="text" id="sdTransNo" readonly class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-100 dark:bg-slate-950 text-gray-400 text-xs font-bold" />
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Product</label>
+          <select id="sdProdCode" required onchange="updateSdPriceHint()" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Quantity</label>
+          <input type="number" id="sdQty" min="1" required value="1" class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+        <p id="sdPriceHint" class="text-xs text-brand-500 font-semibold"></p>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Line Item</button>
+          <button type="button" onclick="closeSdFormModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- UM USER MODAL -->
+  <div id="umUserModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+      <button onclick="closeUmUserModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="umUserTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-6">User Account</h2>
+
+      <form id="umUserForm" onsubmit="saveUmUser(event)" class="space-y-4">
+        <input type="hidden" id="umEditEmail" value="" />
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">First Name</label>
+            <input type="text" id="umFirst" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Last Name</label>
+            <input type="text" id="umLast" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Email</label>
+          <input type="email" id="umEmail" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Role</label>
+            <select id="umRole" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500"></select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">Status</label>
+            <select id="umStatus" required class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="active">Active</option>
+              <option value="pending">Pending</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 pt-4">
+          <button type="submit" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save User</button>
+          <button type="button" onclick="closeUmUserModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- UM RIGHTS MODAL -->
+  <div id="umRightsModal" class="modal-overlay">
+    <div class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-2xl w-full p-8 shadow-2xl relative">
+      <button onclick="closeUmRightsModal()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+      <h2 id="umRightsTitle" class="text-2xl font-black text-gray-900 dark:text-white mb-1">Permissions Matrix</h2>
+
+      <div id="umRightsBody" class="max-h-80 overflow-y-auto space-y-4 pr-2 mt-4"></div>
+
+      <div class="flex items-center gap-3 pt-6 border-t border-gray-200 dark:border-gray-800 mt-6">
+        <button onclick="saveUmRights()" class="flex-1 py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25">Save Matrix</button>
+        <button onclick="closeUmRightsModal()" class="px-5 py-3 rounded-xl border border-gray-200 dark:border-gray-800 text-xs font-bold">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== MAIN JAVASCRIPT ==================== -->
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
 </html>
