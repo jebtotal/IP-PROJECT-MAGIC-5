@@ -7,19 +7,12 @@
     <title>User Management | ERP MAGIC-5</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='user-management.js') }}" defer></script>
-    <script>window.isSuperadmin = {{ "true" if is_superadmin else "false" }};</script>
   </head>
   <body>
     <main class="wide">
       <p>ERP MAGIC-5</p>
       <h1>User Management</h1>
-      <p>
-        {% if is_superadmin %}
-          Approve users and designate administrators. Superadmin accounts are protected.
-        {% else %}
-          Manage user accounts. Superadmin accounts are not shown.
-        {% endif %}
-      </p>
+      <p>Manage user accounts. Superadmin accounts are not shown.</p>
 
       <section class="panel">
         <h2>Add User</h2>
@@ -50,7 +43,6 @@
               <tr>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Role</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>

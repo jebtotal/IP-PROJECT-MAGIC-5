@@ -61,8 +61,3 @@ Password recovery is available at `/forgot-password`. Configure
 service-role key in browser code or commit it to `.env`.
 
 Keep `.env` private and never put secret or service-role keys in templates or browser-side code. Use a publishable key with Row Level Security (RLS) policies for database access.
-
-User Management is available to admins and superadmins at `/user-management`.
-Admins manage regular users only. Superadmins can approve pending users and
-designate admins; superadmin accounts cannot be blocked, demoted, or removed
-through the application.
