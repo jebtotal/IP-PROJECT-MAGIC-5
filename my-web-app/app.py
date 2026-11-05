@@ -34,7 +34,7 @@ def get_supabase_client():
 
 def get_admin_client():
     if not service_role_key:
-        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY must be set for password resets")
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY must be set for administration")
     return create_client(url, service_role_key)
 
 
@@ -91,12 +91,27 @@ def get_current_profile(client):
         return None
     response = (
         client.table("profiles")
-        .select("id, email, full_name, status")
+        .select("id, email, full_name, status, role, created_at")
         .eq("id", user.id)
         .single()
         .execute()
     )
     return response.data
+
+
+def get_admin_profile():
+    client = get_authenticated_client()
+    if client is None:
+        return None, None
+    profile = get_current_profile(client)
+    if profile is None or profile.get("role") != "admin":
+        return client, None
+    return client, profile
+
+
+def get_user_payload():
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    return payload if isinstance(payload, Mapping) else None
 
 
 def must_set_password(user):
@@ -116,6 +131,165 @@ def index():
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
     return render_template("index.html", profile=profile)
+
+
+@app.get("/user-management")
+def user_management():
+    client, profile = get_admin_profile()
+    if client is None:
+        return redirect(url_for("login"))
+    if profile is None:
+        return redirect(url_for("index"))
+    return render_template("user_management.html", profile=profile)
+
+
+@app.get("/api/users")
+def api_users():
+    client, profile = get_admin_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    try:
+        response = (
+            get_admin_client()
+            .table("profiles")
+            .select("id, email, full_name, status, role, created_at")
+            .eq("role", "user")
+            .order("created_at", desc=True)
+            .execute()
+        )
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("User list could not be loaded")
+        return jsonify(error="Users could not be loaded. Please try again."), 502
+
+    return jsonify(users=response.data)
+
+
+@app.post("/api/users")
+def api_add_user():
+    client, profile = get_admin_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    payload = get_user_payload()
+    full_name = payload.get("full_name") if payload else None
+    email = payload.get("email") if payload else None
+    password = payload.get("password") if payload else None
+    if not all(isinstance(value, str) for value in (full_name, email, password)):
+        return jsonify(error="Name, email, and password are required."), 400
+
+    full_name = full_name.strip()
+    email = email.strip().lower()
+    if not full_name or len(full_name) > 120:
+        return jsonify(error="Enter a name between 1 and 120 characters."), 400
+    if not email or "@" not in email or any(character.isspace() for character in email):
+        return jsonify(error="Enter a valid email address."), 400
+    if len(password) < 8:
+        return jsonify(error="Password must be at least 8 characters."), 400
+
+    try:
+        admin_client = get_admin_client()
+        response = admin_client.auth.admin.create_user(
+            {
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+                "user_metadata": {"full_name": full_name, "must_set_password": False},
+            }
+        )
+        if response.user is None:
+            return jsonify(error="User could not be created."), 502
+        profile_response = admin_client.table("profiles").update(
+            {"full_name": full_name, "role": "user", "status": "approved"}
+        ).eq("id", response.user.id).execute()
+        if not profile_response.data:
+            admin_client.auth.admin.delete_user(response.user.id)
+            return jsonify(error="User profile could not be created."), 502
+    except (AuthError, httpx.HTTPError):
+        app.logger.exception("Administrator user creation failed")
+        return jsonify(error="User could not be created. Check the email and try again."), 400
+    except RuntimeError:
+        app.logger.exception("Administrator user creation is not configured")
+        return jsonify(error="User management is not configured on the server."), 503
+
+    return jsonify(message="User added successfully."), 201
+
+
+@app.patch("/api/users/<user_id>")
+def api_edit_user(user_id):
+    client, profile = get_admin_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    payload = get_user_payload()
+    full_name = payload.get("full_name") if payload else None
+    if not isinstance(full_name, str):
+        return jsonify(error="Name is required."), 400
+    full_name = full_name.strip()
+    if not full_name or len(full_name) > 120:
+        return jsonify(error="Enter a name between 1 and 120 characters."), 400
+
+    try:
+        target = (
+            get_admin_client()
+            .table("profiles")
+            .select("id, role")
+            .eq("id", user_id)
+            .eq("role", "user")
+            .maybe_single()
+            .execute()
+        )
+        if target.data is None:
+            return jsonify(error="User not found."), 404
+        get_admin_client().table("profiles").update(
+            {"full_name": full_name}
+        ).eq("id", user_id).eq("role", "user").execute()
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("Administrator user edit failed")
+        return jsonify(error="User could not be updated. Please try again."), 502
+
+    return jsonify(message="User updated successfully.")
+
+
+@app.patch("/api/users/<user_id>/status")
+def api_update_user_status(user_id):
+    client, profile = get_admin_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    payload = get_user_payload()
+    status = payload.get("status") if payload else None
+    if status not in {"approved", "blocked"}:
+        return jsonify(error="Status must be approved or blocked."), 400
+
+    try:
+        target = (
+            get_admin_client()
+            .table("profiles")
+            .select("id")
+            .eq("id", user_id)
+            .eq("role", "user")
+            .maybe_single()
+            .execute()
+        )
+        if target.data is None:
+            return jsonify(error="User not found."), 404
+        get_admin_client().table("profiles").update(
+            {"status": status}
+        ).eq("id", user_id).eq("role", "user").execute()
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("Administrator user status update failed")
+        return jsonify(error="User status could not be updated. Please try again."), 502
+
+    return jsonify(message="User status updated.")
 
 
 @app.get("/login")
@@ -390,8 +564,8 @@ def api_register():
 
     return (
         jsonify(
-            message="Registration submitted. Your account is pending approval.",
-            status="pending",
+            message="Registration completed. Your account is approved.",
+            status="approved",
         ),
         201,
     )

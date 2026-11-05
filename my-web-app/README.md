@@ -49,6 +49,10 @@ accounts, set the Auth user's `must_set_password` metadata to `true`; the user
 is redirected to set a new password on first login. `FLASK_SECRET_KEY` is
 optional for local development; if omitted, sessions reset when the app restarts.
 
+Apply the user roles migration before opening `/user-management`. Admins can add,
+edit, block, and unblock regular users. The API filters to `role = 'user'`, so
+superadmin accounts are not exposed in the user list.
+
 Password recovery is available at `/forgot-password`. Configure
 `SUPABASE_SERVICE_ROLE_KEY` on the server, plus `MAIL_SERVER`,
 `MAIL_DEFAULT_SENDER`, and the optional `MAIL_PORT`, `MAIL_USERNAME`,
