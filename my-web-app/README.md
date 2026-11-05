@@ -49,4 +49,11 @@ accounts, set the Auth user's `must_set_password` metadata to `true`; the user
 is redirected to set a new password on first login. `FLASK_SECRET_KEY` is
 optional for local development; if omitted, sessions reset when the app restarts.
 
+Password recovery is available at `/forgot-password`. Configure
+`SUPABASE_SERVICE_ROLE_KEY` on the server, plus `MAIL_SERVER`,
+`MAIL_DEFAULT_SENDER`, and the optional `MAIL_PORT`, `MAIL_USERNAME`,
+`MAIL_PASSWORD`, and `MAIL_USE_TLS` settings. Reset links use an
+`itsdangerous` signed token that expires after one hour. Never expose the
+service-role key in browser code or commit it to `.env`.
+
 Keep `.env` private and never put secret or service-role keys in templates or browser-side code. Use a publishable key with Row Level Security (RLS) policies for database access.

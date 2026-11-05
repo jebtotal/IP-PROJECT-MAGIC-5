@@ -2,11 +2,14 @@
 
 import os
 import secrets
+import smtplib
+from email.message import EmailMessage
 from collections.abc import Mapping
 
 import httpx
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from supabase import create_client
 from supabase_auth.errors import AuthError, AuthRetryableError
 
@@ -14,16 +17,57 @@ load_dotenv()
 
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_KEY")
+service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 if not url or not key:
     raise RuntimeError("SUPABASE_URL and SUPABASE_KEY must be set in .env")
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
+reset_token_serializer = URLSafeTimedSerializer(app.secret_key)
+RESET_TOKEN_MAX_AGE = 3600
 
 
 def get_supabase_client():
     return create_client(url, key)
+
+
+def get_admin_client():
+    if not service_role_key:
+        raise RuntimeError("SUPABASE_SERVICE_ROLE_KEY must be set for password resets")
+    return create_client(url, service_role_key)
+
+
+def send_password_reset_email(email, reset_url):
+    server = os.getenv("MAIL_SERVER")
+    username = os.getenv("MAIL_USERNAME")
+    password = os.getenv("MAIL_PASSWORD")
+    sender = os.getenv("MAIL_DEFAULT_SENDER") or username
+    if not server or not sender:
+        raise RuntimeError("MAIL_SERVER and MAIL_DEFAULT_SENDER must be configured")
+
+    message = EmailMessage()
+    message["Subject"] = "Reset your ERP MAGIC-5 password"
+    message["From"] = sender
+    message["To"] = email
+    message.set_content(
+        "Use this link to reset your ERP MAGIC-5 password. "
+        f"The link expires in one hour:\n\n{reset_url}\n"
+    )
+
+    port = int(os.getenv("MAIL_PORT", "587"))
+    use_tls = os.getenv("MAIL_USE_TLS", "true").lower() == "true"
+    with smtplib.SMTP(server, port, timeout=15) as smtp:
+        if use_tls:
+            smtp.starttls()
+        if username and password:
+            smtp.login(username, password)
+        smtp.send_message(message)
+
+
+def get_reset_user(email):
+    users = get_admin_client().auth.admin.list_users()
+    return next((user for user in users if user.email == email), None)
 
 
 def get_authenticated_client():
@@ -79,6 +123,79 @@ def login():
     if get_authenticated_client() is not None:
         return redirect(url_for("index"))
     return render_template("login.html")
+
+
+@app.get("/forgot-password")
+def forgot_password():
+    return render_template("forgot_password.html")
+
+
+@app.post("/api/forgot-password")
+def api_forgot_password():
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    email = payload.get("email") if isinstance(payload, Mapping) else None
+    if not isinstance(email, str):
+        return jsonify(error="Email is required."), 400
+
+    email = email.strip().lower()
+    if not email or "@" not in email or any(character.isspace() for character in email):
+        return jsonify(error="Enter a valid email address."), 400
+
+    try:
+        user = get_reset_user(email)
+        if user is not None:
+            token = reset_token_serializer.dumps({"user_id": user.id, "email": email})
+            reset_url = url_for("reset_password", token=token, _external=True)
+            send_password_reset_email(email, reset_url)
+    except (RuntimeError, ValueError, smtplib.SMTPException):
+        app.logger.exception("Password reset email could not be sent")
+        return jsonify(error="Password reset service is unavailable. Please try again later."), 502
+    except (AuthError, httpx.HTTPError):
+        app.logger.exception("Supabase password reset lookup failed")
+        return jsonify(error="Password reset service is unavailable. Please try again later."), 502
+
+    return jsonify(
+        message="If an account exists for that email, a password reset link is on its way."
+    )
+
+
+@app.get("/reset-password")
+def reset_password():
+    return render_template("reset_password.html", token=request.args.get("token", ""))
+
+
+@app.post("/api/reset-password")
+def api_reset_password():
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    token = payload.get("token") if isinstance(payload, Mapping) else None
+    password = payload.get("password") if isinstance(payload, Mapping) else None
+    confirmation = payload.get("confirmation") if isinstance(payload, Mapping) else None
+    if not all(isinstance(value, str) and value for value in (token, password, confirmation)):
+        return jsonify(error="Reset token, password, and confirmation are required."), 400
+    if len(password) < 8:
+        return jsonify(error="Password must be at least 8 characters."), 400
+    if password != confirmation:
+        return jsonify(error="Passwords do not match."), 400
+
+    try:
+        data = reset_token_serializer.loads(token, max_age=RESET_TOKEN_MAX_AGE)
+    except SignatureExpired:
+        return jsonify(error="This reset link has expired. Request a new one."), 400
+    except BadSignature:
+        return jsonify(error="This reset link is invalid. Request a new one."), 400
+
+    try:
+        user = get_reset_user(data["email"])
+        if user is None or user.id != data["user_id"]:
+            return jsonify(error="This reset link is invalid. Request a new one."), 400
+        get_admin_client().auth.admin.update_user_by_id(user.id, {"password": password})
+    except (KeyError, TypeError):
+        return jsonify(error="This reset link is invalid. Request a new one."), 400
+    except (RuntimeError, AuthError, httpx.HTTPError):
+        app.logger.exception("Supabase password reset failed")
+        return jsonify(error="Password could not be reset. Please try again."), 502
+
+    return jsonify(message="Password reset. You can now log in.", redirect=url_for("login"))
 
 
 @app.post("/api/login")
