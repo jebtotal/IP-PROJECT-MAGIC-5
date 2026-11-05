@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Manage ERP MAGIC-5 users">
+    <title>User Management | ERP MAGIC-5</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='user-management.js') }}" defer></script>
+  </head>
+  <body>
+    <main class="wide">
+      <p>ERP MAGIC-5</p>
+      <h1>User Management</h1>
+      <p>Manage user accounts. Superadmin accounts are not shown.</p>
+
+      <section class="panel">
+        <h2>Add User</h2>
+        <form id="add-user-form" class="form-grid">
+          <label>
+            Full name
+            <input name="full_name" maxlength="120" required>
+          </label>
+          <label>
+            Email
+            <input name="email" type="email" required>
+          </label>
+          <label>
+            Temporary password
+            <input name="password" type="password" minlength="8" required>
+          </label>
+          <button type="submit">Add User</button>
+        </form>
+        <p id="add-user-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Users</h2>
+        <p id="users-message" role="status" aria-live="polite"></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="users-table"></tbody>
+          </table>
+        </div>
+      </section>
+      <p><a href="{{ url_for('index') }}">Back to workspace</a></p>
+    </main>
+  </body>
+</html>
