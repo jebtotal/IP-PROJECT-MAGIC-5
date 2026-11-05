@@ -99,12 +99,12 @@ def get_current_profile(client):
     return response.data
 
 
-def get_admin_profile():
+def get_management_profile():
     client = get_authenticated_client()
     if client is None:
         return None, None
     profile = get_current_profile(client)
-    if profile is None or profile.get("role") != "admin":
+    if profile is None or profile.get("role") not in {"admin", "superadmin"}:
         return client, None
     return client, profile
 
@@ -135,31 +135,35 @@ def index():
 
 @app.get("/user-management")
 def user_management():
-    client, profile = get_admin_profile()
+    client, profile = get_management_profile()
     if client is None:
         return redirect(url_for("login"))
     if profile is None:
         return redirect(url_for("index"))
-    return render_template("user_management.html", profile=profile)
+    return render_template(
+        "user_management.html",
+        profile=profile,
+        is_superadmin=profile["role"] == "superadmin",
+    )
 
 
 @app.get("/api/users")
 def api_users():
-    client, profile = get_admin_profile()
+    client, profile = get_management_profile()
     if client is None:
         return jsonify(error="You must be logged in."), 401
     if profile is None:
         return jsonify(error="Administrator access is required."), 403
 
     try:
-        response = (
-            get_admin_client()
-            .table("profiles")
-            .select("id, email, full_name, status, role, created_at")
-            .eq("role", "user")
-            .order("created_at", desc=True)
-            .execute()
+        query = get_admin_client().table("profiles").select(
+            "id, email, full_name, status, role, created_at"
         )
+        if profile["role"] == "admin":
+            query = query.eq("role", "user")
+        else:
+            query = query.in_("role", ["admin", "user"])
+        response = query.order("created_at", desc=True).execute()
     except (RuntimeError, httpx.HTTPError):
         app.logger.exception("User list could not be loaded")
         return jsonify(error="Users could not be loaded. Please try again."), 502
@@ -169,7 +173,7 @@ def api_users():
 
 @app.post("/api/users")
 def api_add_user():
-    client, profile = get_admin_profile()
+    client, profile = get_management_profile()
     if client is None:
         return jsonify(error="You must be logged in."), 401
     if profile is None:
@@ -221,7 +225,7 @@ def api_add_user():
 
 @app.patch("/api/users/<user_id>")
 def api_edit_user(user_id):
-    client, profile = get_admin_profile()
+    client, profile = get_management_profile()
     if client is None:
         return jsonify(error="You must be logged in."), 401
     if profile is None:
@@ -241,15 +245,19 @@ def api_edit_user(user_id):
             .table("profiles")
             .select("id, role")
             .eq("id", user_id)
-            .eq("role", "user")
             .maybe_single()
             .execute()
         )
-        if target.data is None:
+        if target.data is None or (
+            profile["role"] == "admin" and target.data["role"] != "user"
+        ) or target.data["role"] == "superadmin":
             return jsonify(error="User not found."), 404
-        get_admin_client().table("profiles").update(
+        update_query = get_admin_client().table("profiles").update(
             {"full_name": full_name}
-        ).eq("id", user_id).eq("role", "user").execute()
+        ).eq("id", user_id)
+        if profile["role"] == "admin":
+            update_query = update_query.eq("role", "user")
+        update_query.execute()
     except (RuntimeError, httpx.HTTPError):
         app.logger.exception("Administrator user edit failed")
         return jsonify(error="User could not be updated. Please try again."), 502
@@ -259,7 +267,7 @@ def api_edit_user(user_id):
 
 @app.patch("/api/users/<user_id>/status")
 def api_update_user_status(user_id):
-    client, profile = get_admin_profile()
+    client, profile = get_management_profile()
     if client is None:
         return jsonify(error="You must be logged in."), 401
     if profile is None:
@@ -274,22 +282,99 @@ def api_update_user_status(user_id):
         target = (
             get_admin_client()
             .table("profiles")
-            .select("id")
+            .select("id, role, status")
             .eq("id", user_id)
-            .eq("role", "user")
             .maybe_single()
             .execute()
         )
-        if target.data is None:
+        if target.data is None or (
+            profile["role"] == "admin" and target.data["role"] != "user"
+        ) or target.data["role"] == "superadmin":
             return jsonify(error="User not found."), 404
-        get_admin_client().table("profiles").update(
+        if (
+            profile["role"] == "admin"
+            and target.data["status"] == "pending"
+            and status == "approved"
+        ):
+            return jsonify(error="Only a superadmin can approve pending users."), 403
+        update_query = get_admin_client().table("profiles").update(
             {"status": status}
-        ).eq("id", user_id).eq("role", "user").execute()
+        ).eq("id", user_id)
+        if profile["role"] == "admin":
+            update_query = update_query.eq("role", "user")
+        update_query.execute()
     except (RuntimeError, httpx.HTTPError):
         app.logger.exception("Administrator user status update failed")
         return jsonify(error="User status could not be updated. Please try again."), 502
 
     return jsonify(message="User status updated.")
+
+
+@app.patch("/api/users/<user_id>/role")
+def api_update_user_role(user_id):
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+    if profile["role"] != "superadmin":
+        return jsonify(error="Superadmin access is required."), 403
+
+    payload = get_user_payload()
+    role = payload.get("role") if payload else None
+    if role not in {"admin", "user"}:
+        return jsonify(error="Role must be admin or user."), 400
+
+    try:
+        target = (
+            get_admin_client()
+            .table("profiles")
+            .select("id, role")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if target.data is None or target.data["role"] == "superadmin":
+            return jsonify(error="Superadmin accounts cannot be changed here."), 403
+        get_admin_client().table("profiles").update(
+            {"role": role}
+        ).eq("id", user_id).neq("role", "superadmin").execute()
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("Superadmin role update failed")
+        return jsonify(error="User role could not be updated. Please try again."), 502
+
+    return jsonify(message="User role updated.")
+
+
+@app.delete("/api/users/<user_id>")
+def api_remove_user(user_id):
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+    if profile["role"] != "superadmin":
+        return jsonify(error="Superadmin access is required."), 403
+
+    try:
+        target = (
+            get_admin_client()
+            .table("profiles")
+            .select("id, role")
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if target.data is None:
+            return jsonify(error="User not found."), 404
+        if target.data["role"] == "superadmin":
+            return jsonify(error="Superadmin accounts cannot be removed."), 403
+        get_admin_client().auth.admin.delete_user(user_id)
+    except (RuntimeError, AuthError, httpx.HTTPError):
+        app.logger.exception("Superadmin user removal failed")
+        return jsonify(error="User could not be removed. Please try again."), 502
+
+    return jsonify(message="User removed.")
 
 
 @app.get("/login")
