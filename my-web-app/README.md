@@ -49,8 +49,9 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 ## Database setup and migrations
 
 The app connects directly to the team's Supabase project; it does not use a
-local database or Flask/Alembic migration runner. No Supabase migration files
-or CLI configuration are currently included in this repository.
+local database or Flask/Alembic migration runner. The repository includes a
+versioned HOPE base-table SQL migration, but no Supabase CLI configuration or
+automated migration runner.
 
 Before using database-backed features, confirm with the database administrator
 that the shared project is provisioned with the required schema, Row Level
@@ -74,6 +75,16 @@ For future schema changes, the database administrator should:
 
 Do not invent or rerun a migration based only on the description above; ask the
 database administrator for the authoritative SQL if it is not available.
+
+The HOPE migration is
+`supabase/migrations/20261106002600_hope_base_tables.sql`. It creates the ten
+HOPE base tables and imports 928 source sample rows. Before applying it, the
+database administrator must confirm that none of its table names already
+exists in the target `public` schema. The migration checks for these collisions,
+does not drop or alter existing relations, and excludes the source dump's
+separate audit/soft-delete subsystem. Apply it only through the reviewed
+Supabase Dashboard workflow above; this repository does not run it
+automatically.
 
 ## Environment variables
 
