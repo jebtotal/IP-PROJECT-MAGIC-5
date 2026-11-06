@@ -126,7 +126,6 @@ User Management is available to admins and superadmins at `/user-management`.
 Admins manage regular users only. Superadmins can approve pending users and
 designate admins; superadmin accounts cannot be blocked, demoted, or removed
 through the application.
-<<<<<<< HEAD
 
 Administrators can assign View, Create, Edit, and Delete rights for Customer,
 Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
@@ -135,3 +134,8 @@ corresponding Supabase schema for those tables after the profiles migration.
 
 Password recovery is available at `/forgot-password`. Reset links use an
 `itsdangerous` signed token that expires after one hour.
+
+The signed-in home page exposes only modules with View permission. Use
+`GET /api/modules/<module>/<action>` for a server-side permission check before
+module actions; module slugs are `customer`, `product`, `human-resources`,
+`sales`, and `reports`.

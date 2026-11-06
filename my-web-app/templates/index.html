@@ -8,18 +8,43 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   </head>
   <body>
-    <main>
-      <p>ERP MAGIC-5</p>
+    <main class="{% if profile %}workspace-shell{% endif %}">
       {% if profile %}
-        <h1>Welcome, {{ profile.full_name or profile.email }}.</h1>
-        <p>You are signed in to your workspace.</p>
-        {% if profile.role in ("admin", "superadmin") %}
-          <a class="button" href="{{ url_for('user_management') }}">User Management</a>
-        {% endif %}
-        <form action="{{ url_for('logout') }}" method="post">
-          <button type="submit">Log out</button>
-        </form>
+        <aside class="workspace-sidebar">
+          <p>ERP MAGIC-5</p>
+          <p>USER:{{ profile.full_name or profile.email }}</p>
+          <p>ROLE: {{ profile.role }}</p>
+          
+          <nav aria-label="Main navigation">
+            <a href="{{ url_for('index') }}">Dashboard</a>
+            {% if profile.role in ("admin", "superadmin") %}
+              <a href="{{ url_for('user_management') }}">User Management</a>
+            {% endif %}
+          </nav>
+          <form action="{{ url_for('logout') }}" method="post">
+            <button type="submit">Log out</button>
+          </form>
+        </aside>
+        <section class="workspace-content">
+          <p>ERP MAGIC-5</p>
+          <h1>Welcome, {{ profile.full_name or profile.email }}.</h1>
+          <p>Choose a module you are allowed to view.</p>
+          {% if permission_error %}
+            <p class="notice" role="alert">{{ permission_error }}</p>
+          {% endif %}
+          <div class="module-grid">
+            {% for module in module_cards %}
+              <a class="module-tile" href="#{{ module.slug }}">
+                <strong>{{ module.name }}</strong>
+                <span>View module</span>
+              </a>
+            {% else %}
+              <p>No modules are assigned to your account.</p>
+            {% endfor %}
+          </div>
+        </section>
       {% else %}
+        <p>ERP MAGIC-5</p>
         <h1>Your workspace starts here.</h1>
         <p>
           Sign in to your workspace, or create an account to request access.
