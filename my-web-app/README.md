@@ -66,3 +66,8 @@ User Management is available to admins and superadmins at `/user-management`.
 Admins manage regular users only. Superadmins can approve pending users and
 designate admins; superadmin accounts cannot be blocked, demoted, or removed
 through the application.
+
+Administrators can assign View, Create, Edit, and Delete rights for Customer,
+Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
+are stored in `user_permissions` and recorded in `audit_log`. Apply the
+corresponding Supabase schema for those tables after the profiles migration.

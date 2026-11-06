@@ -61,5 +61,21 @@
       </section>
       <p><a href="{{ url_for('index') }}">Back to workspace</a></p>
     </main>
+    <dialog id="rights-dialog" aria-labelledby="rights-dialog-title">
+      <form method="dialog" id="rights-form">
+        <h2 id="rights-dialog-title">Assign rights</h2>
+        <p id="rights-user"></p>
+        <div class="rights-toolbar">
+          <button type="button" id="rights-all">All</button>
+          <button type="button" id="rights-none">None</button>
+        </div>
+        <div id="rights-matrix"></div>
+        <p id="rights-message" role="status" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button type="button" id="rights-cancel">Cancel</button>
+          <button type="submit" id="rights-save">Save rights</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>

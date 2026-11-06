@@ -3,6 +3,7 @@
 import os
 import secrets
 import smtplib
+from copy import deepcopy
 from email.message import EmailMessage
 from collections.abc import Mapping
 
@@ -26,6 +27,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 reset_token_serializer = URLSafeTimedSerializer(app.secret_key)
 RESET_TOKEN_MAX_AGE = 3600
+RIGHTS_MODULES = (
+    "Customer",
+    "Product",
+    "Human Resources",
+    "Sales",
+    "Reports",
+)
+RIGHTS_ACTIONS = ("view", "create", "edit", "delete")
 
 
 def get_supabase_client():
@@ -112,6 +121,41 @@ def get_management_profile():
 def get_user_payload():
     payload = request.get_json(silent=True) if request.is_json else request.form
     return payload if isinstance(payload, Mapping) else None
+
+
+def empty_permissions():
+    return {
+        module: {action: False for action in RIGHTS_ACTIONS}
+        for module in RIGHTS_MODULES
+    }
+
+
+def validate_permissions(value):
+    if not isinstance(value, Mapping) or set(value) != set(RIGHTS_MODULES):
+        return None
+    permissions = empty_permissions()
+    for module in RIGHTS_MODULES:
+        module_permissions = value[module]
+        if not isinstance(module_permissions, Mapping) or set(module_permissions) != set(
+            RIGHTS_ACTIONS
+        ):
+            return None
+        if not all(isinstance(module_permissions[action], bool) for action in RIGHTS_ACTIONS):
+            return None
+        permissions[module] = dict(module_permissions)
+    return permissions
+
+
+def write_audit_log(admin_client, actor_id, target_user_id, old_values, new_values):
+    admin_client.table("audit_log").insert(
+        {
+            "actor_id": actor_id,
+            "target_user_id": target_user_id,
+            "event_type": "rights_changed",
+            "old_values": old_values,
+            "new_values": new_values,
+        }
+    ).execute()
 
 
 def must_set_password(user):
@@ -375,6 +419,106 @@ def api_remove_user(user_id):
         return jsonify(error="User could not be removed. Please try again."), 502
 
     return jsonify(message="User removed.")
+
+
+def get_rights_target(profile, user_id):
+    target = (
+        get_admin_client()
+        .table("profiles")
+        .select("id, role")
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if target.data is None:
+        return None
+    if target.data["role"] == "superadmin":
+        return None
+    if profile["role"] == "admin" and target.data["role"] != "user":
+        return None
+    return target.data
+
+
+@app.get("/api/users/<user_id>/permissions")
+def api_get_user_permissions(user_id):
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    try:
+        if get_rights_target(profile, user_id) is None:
+            return jsonify(error="User not found."), 404
+        response = (
+            get_admin_client()
+            .table("user_permissions")
+            .select("permissions")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("User permissions could not be loaded")
+        return jsonify(error="User permissions could not be loaded. Please try again."), 502
+
+    response_data = response.data if response is not None else None
+    permissions = (
+        validate_permissions(response_data["permissions"])
+        if response_data
+        else None
+    )
+    return jsonify(permissions=permissions or empty_permissions())
+
+
+@app.patch("/api/users/<user_id>/permissions")
+def api_update_user_permissions(user_id):
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    payload = get_user_payload()
+    permissions = validate_permissions(payload.get("permissions") if payload else None)
+    if permissions is None:
+        return jsonify(error="Invalid permissions payload."), 400
+
+    try:
+        target = get_rights_target(profile, user_id)
+        if target is None:
+            return jsonify(error="User not found."), 404
+        admin_client = get_admin_client()
+        current = (
+            admin_client.table("user_permissions")
+            .select("permissions")
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        current_data = current.data if current is not None else None
+        old_permissions = (
+            validate_permissions(current_data["permissions"])
+            if current_data
+            else empty_permissions()
+        )
+        if old_permissions == permissions:
+            return jsonify(message="Permissions unchanged.", permissions=permissions)
+        admin_client.table("user_permissions").upsert(
+            {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
+        ).execute()
+        write_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            {"permissions": old_permissions},
+            {"permissions": deepcopy(permissions)},
+        )
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("User permissions update failed")
+        return jsonify(error="User permissions could not be updated. Please try again."), 502
+
+    return jsonify(message="Permissions updated.", permissions=permissions)
 
 
 @app.get("/login")
