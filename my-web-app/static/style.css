@@ -20,6 +20,71 @@ main.wide {
   width: min(100%, 72rem);
 }
 
+.workspace-shell {
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 2rem;
+  width: min(100%, 72rem);
+  place-items: start;
+}
+
+.workspace-sidebar {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #f8fafc;
+}
+
+.workspace-sidebar nav {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1.5rem 0;
+}
+
+.workspace-sidebar a {
+  color: #1e293b;
+}
+
+.workspace-content {
+  width: 100%;
+}
+
+.module-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.module-tile {
+  display: grid;
+  gap: 0.5rem;
+  min-height: 7rem;
+  padding: 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  color: #1e293b;
+  text-decoration: none;
+}
+
+.module-tile span {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.notice {
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: #fef3c7;
+}
+
+@media (max-width: 42rem) {
+  .workspace-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
 button,
 .button {
   display: inline-block;

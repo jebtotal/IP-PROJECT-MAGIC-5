@@ -35,6 +35,13 @@ RIGHTS_MODULES = (
     "Reports",
 )
 RIGHTS_ACTIONS = ("view", "create", "edit", "delete")
+MODULE_SLUGS = {
+    "Customer": "customer",
+    "Product": "product",
+    "Human Resources": "human-resources",
+    "Sales": "sales",
+    "Reports": "reports",
+}
 
 
 def get_supabase_client():
@@ -158,6 +165,47 @@ def write_audit_log(admin_client, actor_id, target_user_id, old_values, new_valu
     ).execute()
 
 
+def get_permissions_for_user(client, profile):
+    if profile["role"] == "superadmin":
+        return {
+            module: {action: True for action in RIGHTS_ACTIONS}
+            for module in RIGHTS_MODULES
+        }
+    response = (
+        client.table("user_permissions")
+        .select("permissions")
+        .eq("user_id", profile["id"])
+        .maybe_single()
+        .execute()
+    )
+    response_data = response.data if response is not None else None
+    return (
+        validate_permissions(response_data["permissions"])
+        if response_data
+        else empty_permissions()
+    )
+
+
+def has_permission(permissions, module, action):
+    return (
+        module in RIGHTS_MODULES
+        and action in RIGHTS_ACTIONS
+        and permissions.get(module, {}).get(action) is True
+    )
+
+
+def module_cards(permissions):
+    return [
+        {
+            "name": module,
+            "slug": MODULE_SLUGS[module],
+            "actions": permissions[module],
+        }
+        for module in RIGHTS_MODULES
+        if has_permission(permissions, module, "view")
+    ]
+
+
 def must_set_password(user):
     metadata = user.user_metadata or {}
     return metadata.get("must_set_password") is True
@@ -174,7 +222,44 @@ def index():
         return redirect(url_for("login"))
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
-    return render_template("index.html", profile=profile)
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Workspace permissions could not be loaded")
+        permissions = empty_permissions()
+        permission_error = "Modules are unavailable until permissions are configured."
+    else:
+        permission_error = None
+    return render_template(
+        "index.html",
+        profile=profile,
+        module_cards=module_cards(permissions),
+        permission_error=permission_error,
+    )
+
+
+@app.get("/api/modules/<module>/<action>")
+def api_check_module_permission(module, action):
+    client = get_authenticated_client()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    profile = get_current_profile(client)
+    if profile is None:
+        return jsonify(error="Profile not found."), 403
+    module_name = next(
+        (name for name, slug in MODULE_SLUGS.items() if slug == module),
+        None,
+    )
+    if module_name is None or action not in RIGHTS_ACTIONS:
+        return jsonify(error="Unknown module or action."), 400
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Module permission check failed")
+        return jsonify(error="Permissions could not be checked."), 503
+    if not has_permission(permissions, module_name, action):
+        return jsonify(error="You do not have permission for this action."), 403
+    return jsonify(allowed=True)
 
 
 @app.get("/user-management")
