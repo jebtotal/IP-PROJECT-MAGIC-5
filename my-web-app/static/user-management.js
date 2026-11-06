@@ -2,6 +2,14 @@ const addForm = document.querySelector("#add-user-form");
 const addMessage = document.querySelector("#add-user-message");
 const usersMessage = document.querySelector("#users-message");
 const usersTable = document.querySelector("#users-table");
+const rightsDialog = document.querySelector("#rights-dialog");
+const rightsForm = document.querySelector("#rights-form");
+const rightsMatrix = document.querySelector("#rights-matrix");
+const rightsMessage = document.querySelector("#rights-message");
+const rightsUser = document.querySelector("#rights-user");
+const rightsModules = ["Customer", "Product", "Human Resources", "Sales", "Reports"];
+const rightsActions = ["view", "create", "edit", "delete"];
+let rightsTarget = null;
 
 function showMessage(element, message) {
   element.textContent = message;
@@ -26,6 +34,101 @@ function addCell(row, value) {
   return cell;
 }
 
+function renderRights(permissions) {
+  rightsMatrix.replaceChildren();
+  for (const module of rightsModules) {
+    const section = document.createElement("fieldset");
+    const legend = document.createElement("legend");
+    const moduleToggle = document.createElement("input");
+    moduleToggle.type = "checkbox";
+    moduleToggle.dataset.moduleToggle = module;
+    moduleToggle.checked = rightsActions.every((action) => permissions[module][action]);
+    moduleToggle.indeterminate =
+      !moduleToggle.checked && rightsActions.some((action) => permissions[module][action]);
+    moduleToggle.addEventListener("change", () => {
+      section.querySelectorAll("input[data-action]").forEach((checkbox) => {
+        checkbox.checked = moduleToggle.checked;
+      });
+    });
+    legend.append(moduleToggle, document.createTextNode(` ${module}`));
+    section.appendChild(legend);
+    for (const action of rightsActions) {
+      const label = document.createElement("label");
+      label.className = "rights-option";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset.module = module;
+      checkbox.dataset.action = action;
+      checkbox.checked = permissions[module][action];
+      checkbox.addEventListener("change", () => {
+        const values = [...section.querySelectorAll("input[data-action]")].map(
+          (actionCheckbox) => actionCheckbox.checked,
+        );
+        moduleToggle.checked = values.every(Boolean);
+        moduleToggle.indeterminate = !moduleToggle.checked && values.some(Boolean);
+      });
+      label.append(checkbox, document.createTextNode(action[0].toUpperCase() + action.slice(1)));
+      section.appendChild(label);
+    }
+    rightsMatrix.appendChild(section);
+  }
+}
+
+function readRights() {
+  const permissions = {};
+  for (const module of rightsModules) {
+    permissions[module] = {};
+    for (const action of rightsActions) {
+      permissions[module][action] = rightsMatrix.querySelector(
+        `input[data-module="${CSS.escape(module)}"][data-action="${action}"]`,
+      ).checked;
+    }
+  }
+  return permissions;
+}
+
+async function openRights(user) {
+  rightsTarget = user;
+  rightsUser.textContent = `${user.full_name || user.email} (${user.role})`;
+  rightsMessage.textContent = "";
+  try {
+    const result = await request(`/api/users/${user.id}/permissions`);
+    renderRights(result.permissions);
+    rightsDialog.showModal();
+  } catch (error) {
+    showMessage(usersMessage, error instanceof Error ? error.message : "Rights could not be loaded.");
+  }
+}
+
+function setAllRights(value) {
+  rightsMatrix.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
+    checkbox.checked = value;
+    checkbox.indeterminate = false;
+  });
+}
+
+document.querySelector("#rights-all").addEventListener("click", () => setAllRights(true));
+document.querySelector("#rights-none").addEventListener("click", () => setAllRights(false));
+document.querySelector("#rights-cancel").addEventListener("click", () => rightsDialog.close());
+rightsForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const saveButton = document.querySelector("#rights-save");
+  saveButton.disabled = true;
+  rightsMessage.textContent = "";
+  try {
+    await request(`/api/users/${rightsTarget.id}/permissions`, {
+      method: "PATCH",
+      body: JSON.stringify({permissions: readRights()}),
+    });
+    rightsDialog.close();
+    showMessage(usersMessage, "Rights updated successfully.");
+  } catch (error) {
+    showMessage(rightsMessage, error instanceof Error ? error.message : "Rights could not be updated.");
+  } finally {
+    saveButton.disabled = false;
+  }
+});
+
 function renderUsers(users) {
   usersTable.replaceChildren();
   for (const user of users) {
@@ -41,6 +144,12 @@ function renderUsers(users) {
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => editUser(user));
     actions.appendChild(editButton);
+
+    const rightsButton = document.createElement("button");
+    rightsButton.type = "button";
+    rightsButton.textContent = "Rights";
+    rightsButton.addEventListener("click", () => openRights(user));
+    actions.appendChild(rightsButton);
 
     const statusButton = document.createElement("button");
     statusButton.type = "button";
