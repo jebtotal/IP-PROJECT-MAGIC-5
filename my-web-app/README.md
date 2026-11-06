@@ -120,5 +120,11 @@ access and refresh tokens in the Flask session. A profile with `status =
 accounts, set the Auth user's `must_set_password` metadata to `true`; the user
 is redirected to set a new password on first login.
 
+Keep `.env` private and never put secret or service-role keys in templates or browser-side code. Use a publishable key with Row Level Security (RLS) policies for database access.
+
+User Management is available to admins and superadmins at `/user-management`.
+Admins manage regular users only. Superadmins can approve pending users and
+designate admins; superadmin accounts cannot be blocked, demoted, or removed
+through the application.
 Password recovery is available at `/forgot-password`. Reset links use an
 `itsdangerous` signed token that expires after one hour.
