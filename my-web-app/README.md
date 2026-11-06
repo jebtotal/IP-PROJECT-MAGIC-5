@@ -1,38 +1,44 @@
 # ERP MAGIC-5 web app
 
-A Flask website starter using HTML templates, CSS, and Supabase.
+Flask application using HTML templates, CSS, Supabase Auth, and a Supabase
+PostgreSQL database.
 
 ## Requirements
 
 - Python 3.10 or newer
-- A Supabase project
+- Access to the team's Supabase project (project URL and publishable key)
+- A Supabase account with permission to access the project when applying
+  database changes
 
-## Getting started
+`requirements.txt` installs Flask, itsdangerous, httpx, python-dotenv, supabase,
+and supabase-auth. There is no separate database server or Docker setup for
+local development.
 
-From the `my-web-app` directory, create and activate a virtual environment:
+## Local setup
+
+From the repository root, enter the application directory and create a virtual
+environment:
 
 ```powershell
+cd my-web-app
 py -m venv .venv
 .\.venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```powershell
 py -m pip install -r requirements.txt
 ```
 
-Create a `.env` file and set your Supabase project URL and publishable key:
+Copy `.env.example` to `.env` and replace the placeholders with values provided
+by the project administrator:
 
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-publishable-key
-FLASK_SECRET_KEY=optional-long-random-secret
+```powershell
+Copy-Item .env.example .env
 ```
 
-Apply the SQL migration in `supabase/migrations` to your Supabase project before accepting registrations. It creates a `profiles` table with Row Level Security and a database trigger that creates every new profile with `status = 'pending'`.
+At minimum, set `SUPABASE_URL` and `SUPABASE_KEY`. These identify the Supabase
+project and its publishable key. Do not use a secret or service-role key as
+`SUPABASE_KEY`. The app loads `.env` with `python-dotenv` and exits with an
+error if either required value is missing.
 
-Then run the site:
+Start the app from `my-web-app`:
 
 ```powershell
 py app.py
@@ -40,25 +46,79 @@ py app.py
 
 Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 
-Open [http://127.0.0.1:5000/register](http://127.0.0.1:5000/register) to submit a registration. The `POST /api/register` endpoint accepts JSON or form data with `full_name`, `email`, and `password`. Supabase Auth creates the account; the database trigger ensures the pending status is set by the database rather than trusted from the form.
+## Database setup and migrations
 
-The login flow uses Supabase Auth, which hashes passwords and stores only access
-and refresh tokens in the Flask session. A profile with `status = 'rejected'`
-is treated as blocked by the app. For administrator-created temporary-password
+The app connects directly to the team's Supabase project; it does not use a
+local database or Flask/Alembic migration runner. The repository includes a
+versioned HOPE base-table SQL migration, but no Supabase CLI configuration or
+automated migration runner.
+
+Before using database-backed features, confirm with the database administrator
+that the shared project is provisioned with the required schema, Row Level
+Security (RLS) policies, and database triggers. The existing setup
+documentation described a `profiles` table and a trigger that assigns new
+profiles `status = 'pending'`, but the corresponding SQL migration is not
+present here.
+Do not treat this repository as containing or applying that migration.
+
+For future schema changes, the database administrator should:
+
+1. Provide the reviewed SQL migration to the team and keep the versioned SQL
+   file in the repository under `supabase/migrations/` (for example,
+   `YYYYMMDDHHMMSS_short_description.sql`).
+2. Apply that exact SQL to the team's Supabase project using the Supabase
+   Dashboard SQL Editor, after confirming the target project and reviewing the
+   change.
+3. Commit the migration file and update this section with any project-specific
+   steps. Teammates should coordinate with the database administrator before
+   applying changes to the shared database.
+
+Do not invent or rerun a migration based only on the description above; ask the
+database administrator for the authoritative SQL if it is not available.
+
+The HOPE migration is
+`supabase/migrations/20261106002600_hope_base_tables.sql`. It creates the ten
+HOPE base tables and imports 928 source sample rows. Before applying it, the
+database administrator must confirm that none of its table names already
+exists in the target `public` schema. The migration checks for these collisions,
+does not drop or alter existing relations, and excludes the source dump's
+separate audit/soft-delete subsystem. Apply it only through the reviewed
+Supabase Dashboard workflow above; this repository does not run it
+automatically.
+
+## Environment variables
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_KEY` | Yes | Supabase publishable key used by the app |
+| `FLASK_SECRET_KEY` | No for local development | Flask session and reset-token signing key; if omitted, a temporary key is generated at startup and sessions do not survive a restart |
+| `SUPABASE_SERVICE_ROLE_KEY` | Only for password recovery | Server-only key used for administrator Auth operations |
+| `MAIL_SERVER` | Only for password recovery | SMTP server hostname |
+| `MAIL_DEFAULT_SENDER` | Only for password recovery unless `MAIL_USERNAME` is set | From address for password reset email |
+| `MAIL_PORT` | No | SMTP port; defaults to `587` |
+| `MAIL_USERNAME` | No | SMTP login and fallback sender address |
+| `MAIL_PASSWORD` | No | SMTP password |
+| `MAIL_USE_TLS` | No | Whether to use STARTTLS; defaults to `true` |
+
+Password recovery requires `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER`, and a
+sender address (`MAIL_DEFAULT_SENDER` or `MAIL_USERNAME`). Keep service-role
+and SMTP credentials server-side only. Never commit `.env` or put secrets in
+templates or browser-side code. `.env` is ignored by Git; use
+`.env.example` only for placeholders.
+
+## Application notes
+
+Registration is available at `/register`. The `POST /api/register` endpoint
+accepts JSON or form data with `full_name`, `email`, and `password`. Supabase
+Auth creates the account; the database is responsible for setting a new
+profile's pending status.
+
+The login flow uses Supabase Auth, which hashes passwords and stores only
+access and refresh tokens in the Flask session. A profile with `status =
+'rejected'` is treated as blocked. For administrator-created temporary-password
 accounts, set the Auth user's `must_set_password` metadata to `true`; the user
-is redirected to set a new password on first login. `FLASK_SECRET_KEY` is
-optional for local development; if omitted, sessions reset when the app restarts.
-
-Apply the user roles migration before opening `/user-management`. Admins can add,
-edit, block, and unblock regular users. The API filters to `role = 'user'`, so
-superadmin accounts are not exposed in the user list.
-
-Password recovery is available at `/forgot-password`. Configure
-`SUPABASE_SERVICE_ROLE_KEY` on the server, plus `MAIL_SERVER`,
-`MAIL_DEFAULT_SENDER`, and the optional `MAIL_PORT`, `MAIL_USERNAME`,
-`MAIL_PASSWORD`, and `MAIL_USE_TLS` settings. Reset links use an
-`itsdangerous` signed token that expires after one hour. Never expose the
-service-role key in browser code or commit it to `.env`.
+is redirected to set a new password on first login.
 
 Keep `.env` private and never put secret or service-role keys in templates or browser-side code. Use a publishable key with Row Level Security (RLS) policies for database access.
 
@@ -66,8 +126,12 @@ User Management is available to admins and superadmins at `/user-management`.
 Admins manage regular users only. Superadmins can approve pending users and
 designate admins; superadmin accounts cannot be blocked, demoted, or removed
 through the application.
+<<<<<<< HEAD
 
 Administrators can assign View, Create, Edit, and Delete rights for Customer,
 Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
 are stored in `user_permissions` and recorded in `audit_log`. Apply the
 corresponding Supabase schema for those tables after the profiles migration.
+
+Password recovery is available at `/forgot-password`. Reset links use an
+`itsdangerous` signed token that expires after one hour.
