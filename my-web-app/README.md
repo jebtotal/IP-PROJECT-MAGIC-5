@@ -88,6 +88,17 @@ The HOPE schema is split into timestamp-ordered migrations:
   three default roles, and 30 rights currently documented in the checked-in
   design notes. The six unspecified rights and five superadmin account records
   are deferred; this seed contains no member emails, passwords, or tokens.
+- `20261108000000_s1_dba_06_audit_user.sql` makes `audit_user()` prefer the
+  authenticated Supabase JWT user ID, then a transaction-local
+  `app.username`, then the literal fallback `system`. Authenticated requests
+  already carry the JWT; no application call is needed. The service-role
+  rights-change logger continues writing its own explicit `actor_id` fields;
+  this migration does not change that separate write contract. Do not set
+  `app.username` in a separate pooled API call; any explicit setting must be
+  transaction-local to the audited statement.
+  Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
+  migrations to test add/edit/soft-delete attribution and the fallback; it
+  rolls back test rows.
 
 Apply the files in filename order, only after confirming the target project and
 reviewing existing HOPE relations. The base migration does not touch the
