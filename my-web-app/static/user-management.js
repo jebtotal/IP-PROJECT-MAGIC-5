@@ -7,9 +7,14 @@ const rightsForm = document.querySelector("#rights-form");
 const rightsMatrix = document.querySelector("#rights-matrix");
 const rightsMessage = document.querySelector("#rights-message");
 const rightsUser = document.querySelector("#rights-user");
+const editUserDialog = document.querySelector("#edit-user-dialog");
+const editUserForm = document.querySelector("#edit-user-form");
+const editUserName = document.querySelector("#edit-user-name");
+const editUserMessage = document.querySelector("#edit-user-message");
 const rightsModules = ["Customer", "Product", "Human Resources", "Sales", "Reports"];
 const rightsActions = ["view", "create", "edit", "delete"];
 let rightsTarget = null;
+let editUserTarget = null;
 
 function showMessage(element, message) {
   element.textContent = message;
@@ -120,10 +125,39 @@ rightsForm.addEventListener("submit", async (event) => {
       method: "PATCH",
       body: JSON.stringify({permissions: readRights()}),
     });
+
     rightsDialog.close();
     showMessage(usersMessage, "Rights updated successfully.");
   } catch (error) {
     showMessage(rightsMessage, error instanceof Error ? error.message : "Rights could not be updated.");
+  } finally {
+    saveButton.disabled = false;
+  }
+});
+
+document.querySelector("#edit-user-cancel").addEventListener("click", () => editUserDialog.close());
+editUserForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const fullName = editUserName.value.trim();
+  if (!fullName) {
+    editUserMessage.textContent = "Enter a full name.";
+    return;
+  }
+
+  const saveButton = document.querySelector("#edit-user-save");
+  saveButton.disabled = true;
+  editUserMessage.textContent = "";
+  try {
+    await request(`/api/users/${editUserTarget.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({full_name: fullName}),
+    });
+    editUserDialog.close();
+    await loadUsers();
+    showMessage(usersMessage, "User updated successfully.");
+  } catch (error) {
+    editUserMessage.textContent =
+      error instanceof Error ? error.message : "User could not be updated.";
   } finally {
     saveButton.disabled = false;
   }
@@ -198,19 +232,11 @@ async function loadUsers() {
 }
 
 async function editUser(user) {
-  const fullName = window.prompt("Full name", user.full_name || "");
-  if (fullName === null || fullName.trim() === user.full_name) {
-    return;
-  }
-  try {
-    await request(`/api/users/${user.id}`, {
-      method: "PATCH",
-      body: JSON.stringify({full_name: fullName}),
-    });
-    await loadUsers();
-  } catch (error) {
-    showMessage(usersMessage, error instanceof Error ? error.message : "User could not be updated.");
-  }
+  editUserTarget = user;
+  editUserName.value = user.full_name || "";
+  editUserMessage.textContent = "";
+  editUserDialog.showModal();
+  editUserName.focus();
 }
 
 async function updateStatus(user) {
