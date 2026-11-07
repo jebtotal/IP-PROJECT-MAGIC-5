@@ -49,9 +49,10 @@ Open [http://127.0.0.1:5000](http://127.0.0.1:5000).
 ## Database setup and migrations
 
 The app connects directly to the team's Supabase project; it does not use a
-local database or Flask/Alembic migration runner. The repository includes a
-versioned HOPE base-table SQL migration, but no Supabase CLI configuration or
-automated migration runner.
+local database or Flask/Alembic migration runner. The repository has no
+Supabase CLI configuration or automated migration runner; the database
+administrator applies the ordered SQL files through the Supabase Dashboard SQL
+Editor.
 
 Before using database-backed features, confirm with the database administrator
 that the shared project is provisioned with the required schema, Row Level
@@ -61,30 +62,25 @@ profiles `status = 'pending'`, but the corresponding SQL migration is not
 present here.
 Do not treat this repository as containing or applying that migration.
 
-For future schema changes, the database administrator should:
+The HOPE schema is split into timestamp-ordered migrations:
 
-1. Provide the reviewed SQL migration to the team and keep the versioned SQL
-   file in the repository under `supabase/migrations/` (for example,
-   `YYYYMMDDHHMMSS_short_description.sql`).
-2. Apply that exact SQL to the team's Supabase project using the Supabase
-   Dashboard SQL Editor, after confirming the target project and reviewing the
-   change.
-3. Commit the migration file and update this section with any project-specific
-   steps. Teammates should coordinate with the database administrator before
-   applying changes to the shared database.
+- `20261106002600_hope_base_tables.sql` creates the ten source operational
+  tables plus `audit_log`. It stops on partial/conflicting relations and
+  accepts a complete existing HOPE schema only when required source columns
+  are present.
+- `20261107000000_hope_sample_data.sql` inserts the 928 source sample rows;
+  primary-key conflicts are ignored so missing rows can be added safely.
+- `20261107000100_hope_audit_support.sql` adds the audit/soft-delete functions,
+  columns, triggers, and active-row views. It preserves `audit_user()` exactly
+  as supplied in `HopeDB_audit.sql`; S1-DBA-06 owns any later change to it.
+
+Apply the files in filename order, only after confirming the target project and
+reviewing existing HOPE relations. The base migration does not touch the
+`profiles` table or Supabase Auth data used by login and registration. The
+repository does not connect to or inspect the live database automatically.
 
 Do not invent or rerun a migration based only on the description above; ask the
 database administrator for the authoritative SQL if it is not available.
-
-The HOPE migration is
-`supabase/migrations/20261106002600_hope_base_tables.sql`. It creates the ten
-HOPE base tables and imports 928 source sample rows. Before applying it, the
-database administrator must confirm that none of its table names already
-exists in the target `public` schema. The migration checks for these collisions,
-does not drop or alter existing relations, and excludes the source dump's
-separate audit/soft-delete subsystem. Apply it only through the reviewed
-Supabase Dashboard workflow above; this repository does not run it
-automatically.
 
 ## Environment variables
 
