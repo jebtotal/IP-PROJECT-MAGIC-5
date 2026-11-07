@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PentadERP — Sign In Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../shared/tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+</head>
+<body class="min-h-screen flex flex-col">
+  <header class="h-20 glass-panel bg-white/80 dark:bg-slate-900/80 px-6 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-3 font-black text-xl tracking-tight text-gray-900 dark:text-white">
+      <span class="font-extrabold leading-none">Pentad<span class="text-brand-500">ERP</span></span>
+    </a>
+    <button type="button" onclick="toggleTheme()" aria-label="Toggle color theme" class="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
+      <i class="fa-solid fa-moon dark:hidden text-sm" aria-hidden="true"></i>
+      <i class="fa-solid fa-sun hidden dark:block text-amber-400 text-sm" aria-hidden="true"></i>
+    </button>
+  </header>
+
+  <main class="flex-1 flex items-center justify-center px-4 py-10">
+    <section class="modal-content glass-panel bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-8 shadow-2xl relative" aria-labelledby="loginTitle">
+      <button type="button" aria-label="Close sign-in dialog" class="absolute top-6 right-6 text-gray-400 hover:text-gray-200">
+        <i class="fa-solid fa-xmark text-lg" aria-hidden="true"></i>
+      </button>
+
+      <div class="mb-6">
+        <h1 id="loginTitle" class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Sign In</h1>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Sign in to your account.</p>
+      </div>
+
+      <div class="space-y-4">
+        <div>
+          <label for="loginEmail" class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Email Address</label>
+          <input type="email" id="loginEmail" name="email" placeholder="you@company.com" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-brand-500 outline-none" />
+        </div>
+
+        <div>
+          <label for="loginPassword" class="block text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Password</label>
+          <div class="relative">
+            <input type="password" id="loginPassword" name="password" placeholder="••••••••" required class="w-full px-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-white/50 dark:bg-slate-950/50 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-brand-500 outline-none pr-10" />
+            <button type="button" aria-label="Show password" class="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-200 outline-none focus:outline-none">
+              <i class="fa-solid fa-eye-slash text-xs" aria-hidden="true"></i>
+            </button>
+          </div>
+        </div>
+
+        <button type="button" class="w-full py-3 rounded-xl bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-brand-600/25 transition-all">Sign In</button>
+      </div>
+
+      <div class="mt-4 text-right">
+        <a href="#" class="text-xs text-brand-500 font-bold hover:underline">Forgot password?</a>
+        <span class="ml-1 px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-950 text-gray-500 text-[10px] font-bold uppercase tracking-wider">Proposed</span>
+      </div>
+
+      <p class="text-center text-xs text-gray-500 mt-6">
+        Need an account? <a href="register.html" class="text-brand-500 font-bold hover:underline">Register</a>
+      </p>
+    </section>
+  </main>
+  <script>
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+  </script>
+</body>
+</html>
