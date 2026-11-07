@@ -50,9 +50,11 @@ function renderRights(permissions) {
   rightsMatrix.replaceChildren();
   for (const module of rightsModules) {
     const section = document.createElement("fieldset");
+    section.className = "rights-group";
     const legend = document.createElement("legend");
     const moduleToggle = document.createElement("input");
     moduleToggle.type = "checkbox";
+    moduleToggle.setAttribute("aria-label", `Select all ${module} actions`);
     moduleToggle.dataset.moduleToggle = module;
     moduleToggle.checked = rightsActions.every((action) => permissions[module][action]);
     moduleToggle.indeterminate =
@@ -69,6 +71,7 @@ function renderRights(permissions) {
       label.className = "rights-option";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
+      checkbox.setAttribute("aria-label", `${module}: ${action}`);
       checkbox.dataset.module = module;
       checkbox.dataset.action = action;
       checkbox.checked = permissions[module][action];

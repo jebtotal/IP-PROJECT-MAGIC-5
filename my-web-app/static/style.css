@@ -460,7 +460,7 @@ dialog { color: var(--text-main); }
 .toast-success { border-color: rgba(16, 185, 129, 0.3); color: #047857; }
 
 #rights-matrix { display: grid; gap: 0.75rem; }
-#rights-matrix fieldset { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; padding: 0.85rem; border: 1px solid var(--border-color); border-radius: 0.9rem; }
+#rights-matrix .rights-group { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; padding: 0.85rem; border: 1px solid var(--border-color); border-radius: 0.9rem; }
 #rights-matrix legend { padding: 0 0.35rem; font-size: 0.8rem; font-weight: 900; }
 .rights-option { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-size: 0.75rem; }
 .rights-option input,#rights-matrix legend input { accent-color: #059669; }
