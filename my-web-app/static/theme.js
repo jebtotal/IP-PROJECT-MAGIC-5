@@ -24,6 +24,12 @@
     });
   });
 
+  document.querySelectorAll("[data-dialog-close]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.getElementById(button.dataset.dialogClose)?.close();
+    });
+  });
+
   const sidebar = document.getElementById("app-sidebar");
   const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
   if (sidebar && sidebarToggle) {
