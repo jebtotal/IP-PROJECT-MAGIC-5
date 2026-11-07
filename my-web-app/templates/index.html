@@ -1,57 +1,224 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="ERP MAGIC-5 web application">
-    <title>ERP MAGIC-5</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  </head>
-  <body>
-    <main class="{% if profile %}workspace-shell{% endif %}">
-      {% if profile %}
-        <aside class="workspace-sidebar">
-          <p>ERP MAGIC-5</p>
-          <p>USER:{{ profile.full_name or profile.email }}</p>
-          <p>ROLE: {{ profile.role }}</p>
-          
-          <nav aria-label="Main navigation">
-            <a href="{{ url_for('index') }}">Dashboard</a>
-            {% if profile.role in ("admin", "superadmin") %}
-              <a href="{{ url_for('user_management') }}">User Management</a>
-            {% endif %}
-          </nav>
-          <form action="{{ url_for('logout') }}" method="post">
-            <button type="submit">Log out</button>
-          </form>
-        </aside>
-        <section class="workspace-content">
-          <p>ERP MAGIC-5</p>
-          <h1>Welcome, {{ profile.full_name or profile.email }}.</h1>
-          <p>Choose a module you are allowed to view.</p>
-          {% if permission_error %}
-            <p class="notice" role="alert">{{ permission_error }}</p>
-          {% endif %}
-          <div class="module-grid">
-            {% for module in module_cards %}
-              <a class="module-tile" href="#{{ module.slug }}">
-                <strong>{{ module.name }}</strong>
-                <span>View module</span>
+{% extends "base.html" %}
+{% set page_title = "Dashboard" %}
+{% block title %}ERP MAGIC-5{% endblock %}
+
+{% block content %}
+  <section class="dashboard-intro">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> YOUR WORKSPACE</span>
+      <h2>Welcome, {{ profile.full_name or profile.email }}.</h2>
+      <p>Choose a module you are allowed to view.</p>
+    </div>
+    <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
+  </section>
+  {% if permission_error %}
+    <p class="notice" role="alert">{{ permission_error }}</p>
+  {% endif %}
+  <section class="module-grid" aria-label="Modules available to your account">
+    {% for module in module_cards %}
+      <article class="module-tile glass-panel glow-hover">
+        <div class="module-icon"><i class="fa-solid fa-cubes-stacked" aria-hidden="true"></i></div>
+        <span class="module-status">ACCESS GRANTED</span>
+        <h3>{{ module.name }}</h3>
+        <p>This module is available based on your assigned rights.</p>
+        <div class="module-actions" aria-label="Available actions">
+          {% for action, allowed in module.actions.items() %}
+            {% if allowed %}<span>{{ action|title }}</span>{% endif %}
+          {% endfor %}
+        </div>
+        <span class="coming-soon">Module workspace coming soon</span>
+      </article>
+    {% else %}
+      <p class="empty-state">No modules are assigned to your account.</p>
+    {% endfor %}
+  </section>
+{% endblock %}
+
+{% block guest_content %}
+  <div id="landing" class="landing-page">
+    <nav class="landing-nav">
+      <div class="landing-nav-inner">
+        <a href="#" class="landing-brand">
+          <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+          <span>ERP MAGIC-5</span>
+        </a>
+        <div class="landing-links" aria-label="Page sections">
+          <a href="#features">Core Modules</a>
+          <a href="#pricing">Pricing Matrix</a>
+          <a href="#architecture">RBAC Governance</a>
+          <a href="#about">About</a>
+        </div>
+        <div class="landing-actions">
+          <button type="button" class="icon-button theme-toggle" data-theme-toggle aria-label="Toggle light and dark theme" title="Toggle theme">
+            <i class="fa-solid fa-moon" aria-hidden="true"></i>
+            <i class="fa-solid fa-sun" aria-hidden="true"></i>
+          </button>
+          <a href="{{ url_for('login') }}" class="nav-sign-in">Sign In</a>
+          <a href="{{ url_for('register') }}" class="btn btn-gradient nav-get-started">Get Started</a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <section class="hero-section">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="hero-content">
+          <div class="hero-copy">
+            <span class="hero-badge"><span class="status-dot"></span> Enterprise Grade ERP System</span>
+            <h1>Executive Control <span>Reimagined.</span></h1>
+            <p>Consolidate customer, product, human resources, and sales operations into one role-aware workspace.</p>
+            <div class="hero-actions">
+              <a href="{{ url_for('login') }}" class="btn btn-primary hero-primary">
+                Launch Live Portal <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
               </a>
-            {% else %}
-              <p>No modules are assigned to your account.</p>
-            {% endfor %}
+              <a href="{{ url_for('register') }}" class="btn btn-secondary hero-secondary">Create an account</a>
+            </div>
           </div>
-        </section>
-      {% else %}
-        <p>ERP MAGIC-5</p>
-        <h1>Your workspace starts here.</h1>
-        <p>
-          Sign in to your workspace, or create an account to request access.
-        </p>
-        <a class="button" href="{{ url_for('login') }}">Log in</a>
-        <a class="button" href="{{ url_for('register') }}">Register</a>
-      {% endif %}
+
+          <div class="preview-wrap">
+            <div class="preview-label">Sample data · illustrative preview</div>
+            <div class="preview-card glass-panel glow-hover">
+              <div class="preview-header">
+                <div class="preview-brand">
+                  <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <strong>ERP MAGIC-5 Workspace</strong>
+                </div>
+                <span class="preview-status"><span class="status-dot"></span> Sample</span>
+              </div>
+              <div class="preview-stats">
+                <div class="preview-stat">
+                  <span>Monthly Revenue</span>
+                  <strong>$84,250.00</strong>
+                  <small>Sample data only</small>
+                </div>
+                <div class="preview-stat">
+                  <span>Order Pipeline</span>
+                  <strong>94 Sales</strong>
+                  <small>Sample data only</small>
+                </div>
+              </div>
+              <div class="preview-foot">
+                <span class="preview-shield"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i></span>
+                <span><strong>Role-based workspace</strong><small>Access follows assigned account rights</small></span>
+                <i class="fa-solid fa-check preview-check" aria-hidden="true"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="landing-section">
+        <div class="section-inner">
+          <div class="section-heading">
+            <h2>Everything you need to grow</h2>
+            <p>Core ERP modules. Role-aware access. One unified workspace.</p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature-card glass-panel glow-hover">
+              <span class="feature-icon"><i class="fa-solid fa-address-book" aria-hidden="true"></i></span>
+              <h3>Customer Management</h3>
+              <p>Manage customer records and related business information.</p>
+            </article>
+            <article class="feature-card glass-panel glow-hover">
+              <span class="feature-icon"><i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i></span>
+              <h3>Product Management</h3>
+              <p>Organize product catalog details and related records.</p>
+            </article>
+            <article class="feature-card glass-panel glow-hover">
+              <span class="feature-icon"><i class="fa-solid fa-id-card" aria-hidden="true"></i></span>
+              <h3>Human Resources</h3>
+              <p>Keep employee and job information together.</p>
+            </article>
+            <article class="feature-card glass-panel glow-hover">
+              <span class="feature-icon"><i class="fa-solid fa-cart-shopping" aria-hidden="true"></i></span>
+              <h3>Sales Management</h3>
+              <p>Support sales workflows in a centralized workspace.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="pricing" class="landing-section landing-section-muted">
+        <div class="section-inner">
+          <div class="section-heading">
+            <h2>Enterprise Tier Plans</h2>
+            <p>Illustrative plan layout. Account access is provisioned by your administrator.</p>
+            <div class="billing-toggle" role="group" aria-label="Billing period">
+              <button type="button" id="btnMonthly" class="billing-active" data-billing-cycle="monthly">Monthly</button>
+              <button type="button" id="btnAnnual" data-billing-cycle="annual">Annual <span>Save 20%</span></button>
+            </div>
+          </div>
+          <div class="pricing-grid">
+            <article class="price-card glass-panel glow-hover">
+              <h3>Starter Ops</h3><p>Essential tools for a growing team.</p>
+              <div class="price-value"><span data-monthly="$49" data-annual="$39">$49</span><small>/mo</small></div>
+              <ul><li>Customer module access</li><li>Standard workspace tools</li><li>Role-based permissions</li></ul>
+              <a href="{{ url_for('register') }}" class="btn btn-outline">Select Starter</a>
+            </article>
+            <article class="price-card price-card-featured glass-panel glow-hover">
+              <span class="popular-badge">Popular Choice</span>
+              <h3>Business Pro</h3><p>Expanded tools for a growing operation.</p>
+              <div class="price-value"><span data-monthly="$149" data-annual="$119">$149</span><small>/mo</small></div>
+              <ul><li>Expanded module access</li><li>Human resources tools</li><li>Workspace rights management</li></ul>
+              <a href="{{ url_for('register') }}" class="btn btn-primary">Start Business Pro</a>
+            </article>
+            <article class="price-card glass-panel glow-hover">
+              <h3>Enterprise Suite</h3><p>Flexible access for larger teams.</p>
+              <div class="price-value"><span data-monthly="$399" data-annual="$319">$399</span><small>/mo</small></div>
+              <ul><li>Expanded user capacity</li><li>Permission matrix controls</li><li>Role-based workspace</li></ul>
+              <a href="{{ url_for('register') }}" class="btn btn-outline">Launch Enterprise</a>
+            </article>
+          </div>
+          <p class="sample-note">Pricing is illustrative sample content and does not represent an in-app purchase.</p>
+        </div>
+      </section>
+
+      <section id="architecture" class="landing-section">
+        <div class="section-inner">
+          <div class="section-heading">
+            <h2>RBAC Governance</h2>
+            <p>Role-based access control helps keep module access aligned with each account.</p>
+          </div>
+          <div class="role-grid">
+            <article class="role-card glass-panel glow-hover">
+              <span class="role-label role-superadmin">Superadmin</span>
+              <p>Manages users, roles, and system-wide permissions.</p>
+            </article>
+            <article class="role-card glass-panel glow-hover">
+              <span class="role-label role-admin">Admin</span>
+              <p>Manages user accounts and assigned rights, except Superadmin accounts.</p>
+            </article>
+            <article class="role-card glass-panel glow-hover">
+              <span class="role-label role-user">User</span>
+              <p>Sees modules and actions allowed by assigned permissions.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="about" class="landing-section">
+        <div class="section-inner">
+          <div class="section-heading"><h2>About ERP MAGIC-5</h2></div>
+          <p class="about-copy">ERP MAGIC-5 is an ERP workspace for customer, product, human resources, and sales operations. Access to the workspace is determined by account role and assigned rights.</p>
+        </div>
+      </section>
     </main>
-  </body>
-</html>
+    <footer class="landing-footer">© 2026 ERP MAGIC-5. All rights reserved.</footer>
+  </div>
+{% endblock %}
+
+{% block page_scripts %}
+  <script>
+    document.querySelectorAll("[data-billing-cycle]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const cycle = button.dataset.billingCycle;
+        document.querySelectorAll("[data-billing-cycle]").forEach((option) => {
+          option.classList.toggle("billing-active", option === button);
+        });
+        document.querySelectorAll("[data-monthly][data-annual]").forEach((price) => {
+          price.textContent = price.dataset[cycle];
+        });
+      });
+    });
+  </script>
+{% endblock %}
