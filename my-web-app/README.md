@@ -73,6 +73,15 @@ The HOPE schema is split into timestamp-ordered migrations:
 - `20261107000100_hope_audit_support.sql` adds the audit/soft-delete functions,
   columns, triggers, and active-row views. It preserves `audit_user()` exactly
   as supplied in `HopeDB_audit.sql`; S1-DBA-06 owns any later change to it.
+- `20261107000200_s1_dba_03_access_control.sql` adds a role reference and
+  blocked flag to the existing `profiles` table, plus normalized module,
+  rights, and soft-deletable `user_permission` tables. It preserves Supabase
+  Auth credentials and the app's existing JSON `user_permissions` contract;
+  the legacy `profiles.role` and new role reference stay synchronized.
+  It adds a case-insensitive unique email index and backfills the new blocked
+  flag from existing blocked/rejected statuses only when the column is first
+  added. The catalogue includes the 30 rights documented in the checked-in
+  design notes; six rights unspecified by the sprint plan remain deferred.
 
 Apply the files in filename order, only after confirming the target project and
 reviewing existing HOPE relations. The base migration does not touch the
@@ -127,6 +136,13 @@ Administrators can assign View, Create, Edit, and Delete rights for Customer,
 Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
 are stored in `user_permissions` and recorded in `audit_log`. Apply the
 corresponding Supabase schema for those tables after the profiles migration.
+The normalized `user_permission` catalogue is additive and is not yet a
+replacement for the JSON permissions used by the current application. The
+new `blocked` column is not yet consulted by the login handler; existing
+`status` checks remain unchanged until a separately reviewed application
+change. This migration leaves both the existing `user_permissions` and
+`audit_log` tables untouched; verify the deployed audit-log columns separately
+before relying on the application's rights-change audit writes.
 
 Password recovery is available at `/forgot-password`. Reset links use an
 `itsdangerous` signed token that expires after one hour.
