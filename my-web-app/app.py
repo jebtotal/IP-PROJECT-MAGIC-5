@@ -337,7 +337,7 @@ def api_add_user():
         if response.user is None:
             return jsonify(error="User could not be created."), 502
         profile_response = admin_client.table("profiles").update(
-            {"full_name": full_name, "role": "user", "status": "approved"}
+            {"full_name": full_name, "role": "user", "status": "pending"}
         ).eq("id", response.user.id).execute()
         if not profile_response.data:
             admin_client.auth.admin.delete_user(response.user.id)
@@ -719,6 +719,9 @@ def api_login():
         if profile["status"] in {"blocked", "rejected"}:
             client.auth.sign_out()
             return jsonify(error="This account is blocked. Contact an administrator."), 403
+        if profile["status"] == "pending":
+            client.auth.sign_out()
+            return jsonify(error="Your account is pending administrator approval."), 403
     except AuthRetryableError:
         app.logger.exception("Supabase login service is temporarily unavailable")
         return jsonify(error="Login service is unavailable. Please try again later."), 502
@@ -836,7 +839,11 @@ def api_register():
                 "email": email,
                 "password": password,
                 "options": {
-                    "data": {"full_name": full_name, "must_set_password": False}
+                    "data": {
+                        "full_name": full_name,
+                        "must_set_password": False,
+                        "status": "pending",
+                    }
                 },
             }
         )
@@ -876,10 +883,23 @@ def api_register():
         app.logger.error("Supabase signup returned no user for a registration request")
         return jsonify(error="Registration could not be completed. Please try again."), 502
 
+    try:
+        get_admin_client().table("profiles").update(
+            {"full_name": full_name, "status": "pending"}
+        ).eq("id", response.user.id).execute()
+    except (RuntimeError, httpx.HTTPError):
+        app.logger.exception("New registration profile status could not be set to pending")
+        return (
+            jsonify(
+                error="Registration completed, but the account could not be placed in the approval queue."
+            ),
+            502,
+        )
+
     return (
         jsonify(
-            message="Registration completed. Your account is approved.",
-            status="approved",
+            message="Registration completed. Your account is pending administrator approval.",
+            status="pending",
         ),
         201,
     )

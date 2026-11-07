@@ -77,5 +77,19 @@
         </div>
       </form>
     </dialog>
+    <dialog id="edit-user-dialog" aria-labelledby="edit-user-dialog-title">
+      <form method="dialog" id="edit-user-form">
+        <h2 id="edit-user-dialog-title">Edit user</h2>
+        <label>
+          Full name
+          <input id="edit-user-name" name="full_name" maxlength="120" required>
+        </label>
+        <p id="edit-user-message" role="status" aria-live="polite"></p>
+        <div class="dialog-actions">
+          <button type="button" id="edit-user-cancel">Cancel</button>
+          <button type="submit" id="edit-user-save">Save changes</button>
+        </div>
+      </form>
+    </dialog>
   </body>
 </html>
