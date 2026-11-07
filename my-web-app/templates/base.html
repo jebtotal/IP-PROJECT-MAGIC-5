@@ -60,7 +60,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     >
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='1') }}">
     {% block head_scripts %}{% endblock %}
   </head>
   <body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
