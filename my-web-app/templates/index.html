@@ -3,6 +3,13 @@
 {% block title %}ERP MAGIC-5{% endblock %}
 
 {% block content %}
+  {% set module_icons = {
+    "Customer": "fa-address-book",
+    "Product": "fa-boxes-stacked",
+    "Human Resources": "fa-id-card",
+    "Sales": "fa-cart-shopping",
+    "Reports": "fa-chart-column"
+  } %}
   <section class="dashboard-intro">
     <div>
       <span class="eyebrow"><span class="status-dot"></span> YOUR WORKSPACE</span>
@@ -16,8 +23,10 @@
   {% endif %}
   <section class="module-grid" aria-label="Modules available to your account">
     {% for module in module_cards %}
-      <article class="module-tile glass-panel glow-hover">
-        <div class="module-icon"><i class="fa-solid fa-cubes-stacked" aria-hidden="true"></i></div>
+      <article class="module-tile glass-panel glow-hover" data-module="{{ module.slug }}">
+        <div class="module-icon">
+          <i class="fa-solid {{ module_icons.get(module.name, 'fa-cubes-stacked') }}" aria-hidden="true"></i>
+        </div>
         <span class="module-status">ACCESS GRANTED</span>
         <h3>{{ module.name }}</h3>
         <p>This module is available based on your assigned rights.</p>
