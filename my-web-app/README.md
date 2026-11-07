@@ -84,6 +84,10 @@ The HOPE schema is split into timestamp-ordered migrations:
   tokens and does not read or write this table; token-table integration is
   future work. When integrated, token consumption must atomically reject
   already-used or expired rows.
+- `20261107000400_s1_dba_05_catalogue_seed.sql` reasserts the five modules,
+  three default roles, and 30 rights currently documented in the checked-in
+  design notes. The six unspecified rights and five superadmin account records
+  are deferred; this seed contains no member emails, passwords, or tokens.
 
 Apply the files in filename order, only after confirming the target project and
 reviewing existing HOPE relations. The base migration does not touch the
