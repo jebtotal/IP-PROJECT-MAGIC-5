@@ -26,17 +26,12 @@ py -m venv .venv
 py -m pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and replace the placeholders with values provided
-by the project administrator:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-At minimum, set `SUPABASE_URL` and `SUPABASE_KEY`. These identify the Supabase
-project and its publishable key. Do not use a secret or service-role key as
-`SUPABASE_KEY`. The app loads `.env` with `python-dotenv` and exits with an
-error if either required value is missing.
+Create `my-web-app/.env` locally and set `SUPABASE_URL` and `SUPABASE_KEY`
+using values provided by the project administrator. These identify the
+Supabase project and its publishable key. Do not use a secret or service-role
+key as `SUPABASE_KEY`. The app loads `.env` with `python-dotenv` and exits with
+an error if either required value is missing. See the environment-variable
+table below for optional settings. Never commit `.env`.
 
 Start the app from `my-web-app`:
 
@@ -82,6 +77,13 @@ The HOPE schema is split into timestamp-ordered migrations:
   flag from existing blocked/rejected statuses only when the column is first
   added. The catalogue includes the 30 rights documented in the checked-in
   design notes; six rights unspecified by the sprint plan remain deferred.
+- `20261107000300_s1_dba_04_password_reset_token.sql` adds a private
+  `password_reset_token` table referencing `profiles(id)`, with a unique
+  lowercase SHA-256 token hash, `reset`/`set_password` purpose, expiry, and
+  nullable `used_at`. The current app still uses signed `itsdangerous` reset
+  tokens and does not read or write this table; token-table integration is
+  future work. When integrated, token consumption must atomically reject
+  already-used or expired rows.
 
 Apply the files in filename order, only after confirming the target project and
 reviewing existing HOPE relations. The base migration does not touch the
@@ -109,8 +111,8 @@ database administrator for the authoritative SQL if it is not available.
 Password recovery requires `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER`, and a
 sender address (`MAIL_DEFAULT_SENDER` or `MAIL_USERNAME`). Keep service-role
 and SMTP credentials server-side only. Never commit `.env` or put secrets in
-templates or browser-side code. `.env` is ignored by Git; use
-`.env.example` only for placeholders.
+templates or browser-side code. `.env` and other environment files are ignored
+by Git.
 
 ## Application notes
 
@@ -145,7 +147,16 @@ change. This migration leaves both the existing `user_permissions` and
 before relying on the application's rights-change audit writes.
 
 Password recovery is available at `/forgot-password`. Reset links use an
-`itsdangerous` signed token that expires after one hour.
+`itsdangerous` signed token that expires after one hour; they are not yet
+persisted in `password_reset_token`. To find expired and consumed database
+tokens:
+
+```sql
+SELECT id, user_id, purpose, expires_at, used_at, created_at
+FROM public.password_reset_token
+WHERE used_at IS NOT NULL OR expires_at <= now()
+ORDER BY expires_at;
+```
 
 The signed-in home page exposes only modules with View permission. Use
 `GET /api/modules/<module>/<action>` for a server-side permission check before
