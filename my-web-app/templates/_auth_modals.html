@@ -1,0 +1,173 @@
+<div
+  id="auth-modal-overlay"
+  class="modal-overlay"
+  aria-hidden="true"
+  data-open-modal="{{ open_modal|default('') }}"
+>
+  <section id="loginModal" class="modal-content auth-card glass-panel auth-modal" role="dialog" aria-modal="true" aria-labelledby="login-title" data-modal-panel="login" hidden>
+    <button type="button" class="icon-button auth-modal-close" data-auth-close aria-label="Close dialog">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="auth-brand">
+      <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+      <span>PentadERP</span>
+    </div>
+    <h2 class="auth-heading" id="login-title">Sign in to your workspace</h2>
+    <p class="auth-description">Use your PentadERP account to continue.</p>
+    <form id="login-form" class="auth-form" action="{{ url_for('api_login') }}" method="post" novalidate>
+      <label class="field" for="login-email">
+        <span class="field-label">Email</span>
+        <input id="login-email" name="email" type="email" autocomplete="email" required>
+      </label>
+      <label class="field" for="login-password">
+        <span class="field-label">Password</span>
+        <span class="input-with-toggle">
+          <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="login-password" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+      </label>
+      <button type="submit" class="btn btn-primary auth-submit">SIGN IN</button>
+      <p class="form-message" data-form-message role="alert" aria-live="polite"></p>
+    </form>
+    <div class="auth-links">
+      <a href="{{ url_for('forgot_password') }}" data-auth-modal="forgot">Forgot your password?</a>
+      <a href="{{ url_for('register') }}" data-auth-modal="register">Create an account</a>
+    </div>
+  </section>
+
+  <section id="registerModal" class="modal-content auth-card glass-panel auth-modal" role="dialog" aria-modal="true" aria-labelledby="register-title" data-modal-panel="register" hidden>
+    <button type="button" class="icon-button auth-modal-close" data-auth-close aria-label="Close dialog">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="auth-brand">
+      <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+      <span>PentadERP</span>
+    </div>
+    <h2 class="auth-heading" id="register-title">Create an account</h2>
+    <p class="auth-description">Request access to your PentadERP workspace.</p>
+    <div class="approval-note">
+      <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+      <span>Your account will be pending until an administrator approves your access.</span>
+    </div>
+    <form id="register-form" class="auth-form" action="{{ url_for('api_register') }}" method="post" novalidate>
+      <label class="field" for="register-first-name">
+        <span class="field-label">First Name</span>
+        <input id="register-first-name" name="first_name" autocomplete="given-name" maxlength="60" required>
+      </label>
+      <label class="field" for="register-last-name">
+        <span class="field-label">Last Name</span>
+        <input id="register-last-name" name="last_name" autocomplete="family-name" maxlength="60" required>
+      </label>
+      <label class="field" for="register-email">
+        <span class="field-label">Email</span>
+        <input id="register-email" name="email" type="email" autocomplete="email" required>
+      </label>
+      <label class="field" for="register-password">
+        <span class="field-label">Password</span>
+        <span class="input-with-toggle">
+          <input id="register-password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="register-password" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+        <span class="field-hint">Use at least 8 characters.</span>
+      </label>
+      <input type="hidden" name="full_name" value="">
+      <button type="submit" class="btn btn-primary auth-submit">Register</button>
+      <p class="form-message" data-form-message role="alert" aria-live="polite"></p>
+    </form>
+    <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}" data-auth-modal="login">Sign in</a></p>
+  </section>
+
+  <section id="forgotModal" class="modal-content auth-card glass-panel auth-modal" role="dialog" aria-modal="true" aria-labelledby="forgot-title" data-modal-panel="forgot" hidden>
+    <button type="button" class="icon-button auth-modal-close" data-auth-close aria-label="Close dialog">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="auth-brand">
+      <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+      <span>PentadERP</span>
+    </div>
+    <h2 class="auth-heading" id="forgot-title">Reset your password</h2>
+    <p class="auth-description">Enter your email and we’ll send you a password reset link.</p>
+    <form id="forgot-password-form" class="auth-form" action="{{ url_for('api_forgot_password') }}" method="post" novalidate>
+      <label class="field" for="forgot-email">
+        <span class="field-label">Email</span>
+        <input id="forgot-email" name="email" type="email" autocomplete="email" required>
+      </label>
+      <button type="submit" class="btn btn-primary auth-submit">Send reset link</button>
+      <p class="form-message" data-form-message role="alert" aria-live="polite"></p>
+    </form>
+    <p class="auth-footer"><a href="{{ url_for('login') }}" data-auth-modal="login">Back to sign in</a></p>
+  </section>
+
+  <section id="resetModal" class="modal-content auth-card glass-panel auth-modal" role="dialog" aria-modal="true" aria-labelledby="reset-title" data-modal-panel="reset" hidden>
+    <button type="button" class="icon-button auth-modal-close" data-auth-close aria-label="Close dialog">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="auth-brand">
+      <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+      <span>PentadERP</span>
+    </div>
+    <h2 class="auth-heading" id="reset-title">Choose a new password</h2>
+    <p class="auth-description">Use the reset link sent to your email to set a new password.</p>
+    <form id="reset-password-form" class="auth-form" action="{{ url_for('api_reset_password') }}" method="post" novalidate>
+      <input type="hidden" name="token" value="{{ token|default('') }}">
+      <label class="field" for="reset-password">
+        <span class="field-label">New password</span>
+        <span class="input-with-toggle">
+          <input id="reset-password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="reset-password" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+      </label>
+      <label class="field" for="reset-confirmation">
+        <span class="field-label">Confirm password</span>
+        <span class="input-with-toggle">
+          <input id="reset-confirmation" name="confirmation" type="password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="reset-confirmation" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+      </label>
+      <button type="submit" class="btn btn-primary auth-submit">Reset password</button>
+      <p class="form-message" data-form-message role="alert" aria-live="polite"></p>
+    </form>
+  </section>
+
+  <section id="setPasswordModal" class="modal-content auth-card glass-panel auth-modal" role="dialog" aria-modal="true" aria-labelledby="set-password-title" data-modal-panel="set_password" hidden>
+    <button type="button" class="icon-button auth-modal-close" data-auth-close aria-label="Close dialog">
+      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+    </button>
+    <div class="auth-brand">
+      <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+      <span>PentadERP</span>
+    </div>
+    <h2 class="auth-heading" id="set-password-title">Set your password</h2>
+    <p class="auth-description">Choose a new password before continuing.</p>
+    <form id="set-password-form" class="auth-form" action="{{ url_for('api_set_password') }}" method="post" novalidate>
+      <label class="field" for="set-password">
+        <span class="field-label">New password</span>
+        <span class="input-with-toggle">
+          <input id="set-password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="set-password" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+      </label>
+      <label class="field" for="set-confirmation">
+        <span class="field-label">Confirm password</span>
+        <span class="input-with-toggle">
+          <input id="set-confirmation" name="confirmation" type="password" minlength="8" autocomplete="new-password" required>
+          <button type="button" class="password-toggle" data-password-toggle="set-confirmation" aria-label="Show password">
+            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+          </button>
+        </span>
+      </label>
+      <button type="submit" class="btn btn-primary auth-submit">Set password</button>
+      <p class="form-message" data-form-message role="alert" aria-live="polite"></p>
+    </form>
+  </section>
+</div>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PentadERP — Dashboard Mockup</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../shared/tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+</head>
+<body class="min-h-screen">
+  <div class="max-w-7xl mx-auto px-4 py-8 space-y-12">
+    <section aria-labelledby="superadminVariant">
+      <h1 id="superadminVariant" class="text-xl font-black text-gray-900 dark:text-white mb-4">Superadmin view</h1>
+      <div class="min-h-screen flex flex-col">
+        <div class="flex flex-1 overflow-hidden">
+          <aside class="w-72 bg-slate-950 text-gray-400 flex flex-col shrink-0 border-r border-gray-800/60">
+            <div class="h-20 px-6 flex items-center gap-3 border-b border-gray-800/60">
+              <div class="pentad-logo w-8 h-8 shrink-0" role="img" aria-label="PentadERP logo"></div>
+              <span class="font-black text-lg text-white">Pentad<span class="text-brand-400">ERP</span></span>
+            </div>
+            <nav class="flex-1 px-4 py-6 space-y-2" aria-label="Superadmin navigation">
+              <button type="button" aria-current="page" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold bg-gradient-to-r from-brand-600 to-indigo-600 text-white shadow-lg shadow-brand-600/25"><i class="fa-solid fa-chart-pie w-4 text-center" aria-hidden="true"></i>Executive Analytics</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-address-book w-4 text-center" aria-hidden="true"></i>Customer CRM</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-boxes-stacked w-4 text-center" aria-hidden="true"></i>Product Catalog</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-id-card w-4 text-center" aria-hidden="true"></i>Human Resources</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-cart-shopping w-4 text-center" aria-hidden="true"></i>Sales Operations</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-file-signature w-4 text-center" aria-hidden="true"></i>Executive Reports</button>
+              <button type="button" class="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-bold text-gray-400 hover:bg-slate-900 hover:text-white transition-all"><i class="fa-solid fa-shield-halved w-4 text-center" aria-hidden="true"></i>User Management</button>
+            </nav>
+            <div class="p-4 border-t border-gray-800/60">
+              <div class="flex items-center gap-3 p-2.5 rounded-2xl bg-slate-900 border border-gray-800/80">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center text-white font-bold text-sm">S</div>
+                <div class="min-w-0"><p class="text-xs font-bold text-white truncate">Sarah Chen</p><p class="text-[10px] text-brand-400 uppercase font-extrabold tracking-wider">Superadmin</p></div>
+              </div>
+            </div>
+          </aside>
+          <div class="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-slate-950">
+            <header class="h-20 glass-panel bg-white/80 dark:bg-slate-900/80 px-6 sm:px-8 flex items-center justify-between shrink-0 z-30 border-b border-gray-200/50 dark:border-gray-800/50">
+              <h2 class="text-lg font-bold text-gray-900 dark:text-white tracking-tight">Dashboard Overview</h2>
+              <div class="flex items-center gap-4"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">Superadmin</span><button type="button" onclick="toggleTheme()" aria-label="Toggle color theme" class="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i class="fa-solid fa-moon dark:hidden text-sm" aria-hidden="true"></i><i class="fa-solid fa-sun hidden dark:block text-amber-400 text-sm" aria-hidden="true"></i></button></div>
+            </header>
+            <main class="flex-1 p-6 sm:p-8 overflow-y-auto">
+              <div class="p-7 rounded-3xl mb-8 bg-gradient-to-r from-brand-700 to-indigo-600 text-white shadow-xl shadow-brand-600/20"><h3 class="text-2xl font-black">Welcome back, Sarah!</h3><p class="text-sm text-white/80 mt-1">You have full system access. You can manage all modules and assign roles to any user.</p></div>
+              <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80 glow-hover"><div class="flex items-center justify-between text-gray-400 text-[10px] font-black uppercase tracking-wider mb-2"><span>Total Customers</span><i class="fa-solid fa-address-book text-brand-500" aria-hidden="true"></i></div><div class="text-3xl font-black text-gray-900 dark:text-white">128</div><p class="text-[11px] font-bold text-emerald-500 mt-2">4 inactive</p></div>
+                <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80 glow-hover"><div class="flex items-center justify-between text-gray-400 text-[10px] font-black uppercase tracking-wider mb-2"><span>Products</span><i class="fa-solid fa-boxes-stacked text-amber-500" aria-hidden="true"></i></div><div class="text-3xl font-black text-gray-900 dark:text-white">86</div><p class="text-[11px] font-bold text-emerald-500 mt-2">Active Catalog</p></div>
+                <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80 glow-hover"><div class="flex items-center justify-between text-gray-400 text-[10px] font-black uppercase tracking-wider mb-2"><span>Open Orders</span><i class="fa-solid fa-cart-shopping text-indigo-500" aria-hidden="true"></i></div><div class="text-3xl font-black text-gray-900 dark:text-white">94</div><p class="text-[11px] font-bold text-emerald-500 mt-2">Sales Pipeline</p></div>
+                <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80 glow-hover"><div class="flex items-center justify-between text-gray-400 text-[10px] font-black uppercase tracking-wider mb-2"><span>Revenue (MTD)</span><i class="fa-solid fa-sack-dollar text-emerald-500" aria-hidden="true"></i></div><div class="text-3xl font-black text-gray-900 dark:text-white">$84,250</div><p class="text-[11px] font-bold text-emerald-500 mt-2">↑ +18.4% expansion</p></div>
+              </div>
+              <div class="grid lg:grid-cols-3 gap-8">
+                <section class="lg:col-span-2 glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80" aria-labelledby="superChart"><div class="flex items-center justify-between mb-6"><h3 id="superChart" class="font-bold text-sm text-gray-900 dark:text-white">Revenue Performance Analytics</h3><span class="text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full bg-brand-500/10 text-brand-500">2026 Fiscal</span></div><div class="h-64 flex items-center justify-center border border-gray-200 dark:border-gray-800 rounded-2xl text-xs text-gray-400">Revenue chart preview</div></section>
+                <section class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80"><h3 class="font-bold text-sm text-gray-900 dark:text-white mb-4">Quick Navigation</h3><div class="space-y-3">
+                  <button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">View Customers</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Manage Products</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Human Resources</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Sales Pipeline</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Reports</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Manage Users</button>
+                </div></section>
+              </div>
+            </main>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="adminVariant">
+      <h2 id="adminVariant" class="text-xl font-black text-gray-900 dark:text-white mb-4">Admin view</h2>
+      <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80">
+        <div class="flex items-center justify-between mb-5"><h3 class="text-lg font-bold text-gray-900 dark:text-white">Dashboard Overview</h3><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">Admin</span></div>
+        <div class="p-7 rounded-3xl mb-6 bg-gradient-to-r from-brand-700 to-indigo-600 text-white shadow-xl shadow-brand-600/20"><h3 class="text-2xl font-black">Welcome back, Lisa!</h3><p class="text-sm text-white/80 mt-1">You can manage most modules and user rights (except Superadmin accounts).</p></div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Customers</p><p class="text-3xl font-black text-gray-900 dark:text-white">128</p><p class="text-[11px] font-bold text-emerald-500 mt-2">4 inactive</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Products</p><p class="text-3xl font-black text-gray-900 dark:text-white">86</p><p class="text-[11px] font-bold text-emerald-500 mt-2">Active Catalog</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Open Orders</p><p class="text-3xl font-black text-gray-900 dark:text-white">94</p><p class="text-[11px] font-bold text-emerald-500 mt-2">Sales Pipeline</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Revenue (MTD)</p><p class="text-3xl font-black text-gray-900 dark:text-white">$84,250</p><p class="text-[11px] font-bold text-emerald-500 mt-2">↑ +18.4% expansion</p></div></div>
+        <div class="mt-6 grid lg:grid-cols-3 gap-6"><div class="lg:col-span-2 glass-panel p-6 rounded-3xl"><h3 class="font-bold text-sm text-gray-900 dark:text-white mb-4">Revenue Performance Analytics</h3><div class="h-48 flex items-center justify-center border border-gray-200 dark:border-gray-800 rounded-2xl text-xs text-gray-400">Revenue chart preview</div></div><div class="glass-panel p-6 rounded-3xl"><h3 class="font-bold text-sm text-gray-900 dark:text-white mb-4">Quick Navigation</h3><div class="space-y-3 text-xs font-bold text-gray-700 dark:text-gray-300"><p>View Customers</p><p>Manage Products</p><p>Human Resources</p><p>Sales Pipeline</p><p>Reports</p><p>Manage Users</p></div></div></div>
+        <aside class="mt-6 p-4 rounded-2xl border border-gray-200 dark:border-gray-800 text-xs text-gray-600 dark:text-gray-300"><span class="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-950 text-gray-500 text-[10px] font-bold uppercase">Proposed</span> Admin User Management hides Superadmin accounts and limits management to Users.</aside>
+      </div>
+    </section>
+
+    <section aria-labelledby="userViewSectionTitle">
+      <h2 id="userViewSectionTitle" class="text-xl font-black text-gray-900 dark:text-white mb-4">User view — limited module View rights</h2>
+      <div class="glass-panel p-6 rounded-3xl bg-white/80 dark:bg-slate-900/80">
+        <div class="flex items-center justify-between mb-5"><h3 class="text-lg font-bold text-gray-900 dark:text-white">Dashboard Overview</h3><div class="flex items-center gap-3"><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-brand-500/10 text-brand-600 dark:text-brand-400 border border-brand-500/20">User</span><button type="button" onclick="toggleTheme()" aria-label="Toggle color theme" class="p-2.5 rounded-xl border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><i class="fa-solid fa-moon dark:hidden text-sm" aria-hidden="true"></i><i class="fa-solid fa-sun hidden dark:block text-amber-400 text-sm" aria-hidden="true"></i></button></div></div>
+        <div class="p-7 rounded-3xl mb-6 bg-gradient-to-r from-brand-700 to-indigo-600 text-white shadow-xl shadow-brand-600/20"><h3 class="text-2xl font-black">Welcome back, Alex!</h3><p class="text-sm text-white/80 mt-1">You have access to the core modules assigned to you. Contact an Admin for elevated permissions.</p></div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6"><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Total Customers</p><p class="text-3xl font-black text-gray-900 dark:text-white">128</p><p class="text-[11px] font-bold text-emerald-500 mt-2">4 inactive</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Products</p><p class="text-3xl font-black text-gray-900 dark:text-white">86</p><p class="text-[11px] font-bold text-emerald-500 mt-2">Active Catalog</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Open Orders</p><p class="text-3xl font-black text-gray-900 dark:text-white">94</p><p class="text-[11px] font-bold text-emerald-500 mt-2">Sales Pipeline</p></div><div class="glass-panel p-6 rounded-3xl"><p class="text-[10px] font-black uppercase tracking-wider text-gray-400">Revenue (MTD)</p><p class="text-3xl font-black text-gray-900 dark:text-white">$84,250</p><p class="text-[11px] font-bold text-emerald-500 mt-2">↑ +18.4% expansion</p></div></div>
+        <div class="mt-6 grid lg:grid-cols-3 gap-6"><div class="lg:col-span-2 glass-panel p-6 rounded-3xl"><h3 class="font-bold text-sm text-gray-900 dark:text-white mb-4">Revenue Performance Analytics</h3><div class="h-48 flex items-center justify-center border border-gray-200 dark:border-gray-800 rounded-2xl text-xs text-gray-400">Revenue chart preview</div></div><div class="glass-panel p-6 rounded-3xl"><div class="flex items-center justify-between mb-4"><h3 class="font-bold text-sm text-gray-900 dark:text-white">Quick Navigation</h3><span class="px-2 py-0.5 rounded-full bg-gray-100 dark:bg-slate-950 text-gray-500 text-[10px] font-bold uppercase">Proposed</span></div><div class="space-y-3"><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">View Customers</button><button type="button" class="w-full p-3.5 rounded-2xl bg-gray-50 dark:bg-slate-950/60 hover:bg-brand-500/10 text-left text-xs font-bold text-gray-700 dark:text-gray-300">Sales Pipeline</button></div><p class="mt-3 text-[10px] text-gray-500">Only modules with View permission are shown.</p></div></div>
+      </div>
+    </section>
+  </div>
+  <script>
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+    }
+  </script>
+</body>
+</html>

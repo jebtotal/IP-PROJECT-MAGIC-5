@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% set page_title = "User Management" %}
+{% block title %}User Management | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>window.isSuperadmin = {{ "true" if is_superadmin else "false" }};</script>
+  <script src="{{ url_for('static', filename='user-management.js', v='2') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> ACCESS ADMINISTRATION</span>
+      <h2>User Management</h2>
+      <p>
+        {% if is_superadmin %}
+          Approve users and designate administrators. Superadmin accounts are protected.
+        {% else %}
+          Manage user accounts. Superadmin accounts are not shown.
+        {% endif %}
+      </p>
+    </div>
+    <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
+  </section>
+
+  <div class="management-grid">
+    <section class="management-panel glass-panel" aria-labelledby="add-user-heading">
+      <h3 id="add-user-heading" class="panel-heading">Add User</h3>
+      <p class="panel-description">Create an approved account with a temporary password.</p>
+      <form id="add-user-form" class="form-grid">
+        <label>
+          Full name
+          <input name="full_name" maxlength="120" required>
+        </label>
+        <label>
+          Email
+          <input name="email" type="email" required>
+        </label>
+        <label>
+          Temporary password
+          <input name="password" type="password" minlength="8" required>
+        </label>
+        <button type="submit" class="btn btn-primary">Add User</button>
+      </form>
+      <p id="add-user-message" class="form-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="management-panel glass-panel" aria-labelledby="users-heading">
+      <h3 id="users-heading" class="panel-heading">Users</h3>
+      <p id="users-message" class="table-message" role="status" aria-live="polite"></p>
+      <div class="table-wrap" tabindex="0" aria-label="Scrollable users table">
+        <table class="management-table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Email</th>
+              <th scope="col">Role</th>
+              <th scope="col">Status</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-table"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <p class="auth-footer"><a href="{{ url_for('index') }}">Back to workspace</a></p>
+
+  <dialog id="rights-dialog" class="app-dialog" aria-labelledby="rights-dialog-title">
+    <form method="dialog" id="rights-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">PERMISSIONS</span>
+          <h2 id="rights-dialog-title" class="dialog-title">Assign rights</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="rights-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="rights-user" class="dialog-description"></p>
+      <div class="rights-toolbar">
+        <button type="button" id="rights-all" class="btn btn-secondary">All</button>
+        <button type="button" id="rights-none" class="btn btn-secondary">None</button>
+      </div>
+      <div id="rights-matrix"></div>
+      <p id="rights-message" class="form-message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="rights-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="rights-save" class="btn btn-primary">Save rights</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="edit-user-dialog" class="app-dialog" aria-labelledby="edit-user-dialog-title">
+    <form method="dialog" id="edit-user-form" class="dialog-body edit-user-form">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">ACCOUNT DETAILS</span>
+          <h2 id="edit-user-dialog-title" class="dialog-title">Edit user</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="edit-user-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <label>
+        Full name
+        <input id="edit-user-name" name="full_name" maxlength="120" required>
+      </label>
+      <p id="edit-user-message" class="form-message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="edit-user-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="edit-user-save" class="btn btn-primary">Save changes</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}

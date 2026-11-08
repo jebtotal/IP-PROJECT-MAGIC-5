@@ -1,35 +1,51 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Register for ERP MAGIC-5">
-    <title>Register | ERP MAGIC-5</title>
-    <script src="{{ url_for('static', filename='register.js') }}" defer></script>
-  </head>
-  <body>
-    <main>
-      <p>ERP MAGIC-5</p>
-      <h1>Create an account</h1>
-      <p>
-        Your account will be pending until an administrator approves your access.
-      </p>
-      <form id="register-form">
-        <label for="full_name">Full name</label>
-        <input id="full_name" name="full_name" autocomplete="name" maxlength="120" required>
+{% extends "base.html" %}
+{% block title %}Register | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script src="{{ url_for('static', filename='register.js') }}" defer></script>
+{% endblock %}
 
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
+{% block guest_content %}
+  <main class="auth-page">
+    <section class="auth-card glass-panel">
+      <a class="auth-back" href="{{ url_for('index') }}">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to home
+      </a>
+      <div class="auth-brand">
+        <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+        <span>PentadERP</span>
+      </div>
+      <h1 class="auth-heading">Create an account</h1>
+      <p class="auth-description">Request access to your PentadERP workspace.</p>
+      <div class="approval-note">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span>Your account will be pending until an administrator approves your access.</span>
+      </div>
+      <form id="register-form" class="auth-form">
+        <label class="field" for="full_name">
+          <span class="field-label">Full name</span>
+          <input id="full_name" name="full_name" autocomplete="name" maxlength="120" required>
+        </label>
 
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
-        <p>Use at least 8 characters.</p>
+        <label class="field" for="email">
+          <span class="field-label">Email</span>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+        </label>
 
-        <button type="submit">Register</button>
-        <p id="form-message" role="status" aria-live="polite"></p>
+        <label class="field" for="password">
+          <span class="field-label">Password</span>
+          <span class="input-with-toggle">
+            <input id="password" name="password" type="password" minlength="8" autocomplete="new-password" required>
+            <button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            </button>
+          </span>
+          <span class="field-hint">Use at least 8 characters.</span>
+        </label>
+
+        <button type="submit" class="btn btn-primary auth-submit">Register</button>
+        <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
       </form>
-      <p><a href="{{ url_for('index') }}">Back to home</a></p>
-    </main>
-  </body>
-  
-</html>
+      <p class="auth-footer">Already have an account? <a href="{{ url_for('login') }}">Log in</a></p>
+    </section>
+  </main>
+{% endblock %}

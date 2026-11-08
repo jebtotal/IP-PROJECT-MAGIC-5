@@ -1,24 +1,42 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Log in | ERP MAGIC-5</title>
-    <script src="{{ url_for('static', filename='login.js') }}" defer></script>
-  </head>
-  <body>
-    <main>
-      <p>ERP MAGIC-5</p>
-      <h1>Log in</h1>
-      <form id="login-form">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" autocomplete="email" required>
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-        <button type="submit">Log in</button>
-        <p id="form-message" role="alert" aria-live="polite"></p>
+{% extends "base.html" %}
+{% block title %}Log in | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script src="{{ url_for('static', filename='login.js') }}" defer></script>
+{% endblock %}
+
+{% block guest_content %}
+  <main class="auth-page">
+    <section class="auth-card glass-panel">
+      <a class="auth-back" href="{{ url_for('index') }}">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Back to home
+      </a>
+      <div class="auth-brand">
+        <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+        <span>PentadERP</span>
+      </div>
+      <h1 class="auth-heading">Sign in to your workspace</h1>
+      <p class="auth-description">Use your PentadERP account to continue.</p>
+      <form id="login-form" class="auth-form">
+        <label class="field" for="email">
+          <span class="field-label">Email</span>
+          <input id="email" name="email" type="email" autocomplete="email" required>
+        </label>
+        <label class="field" for="password">
+          <span class="field-label">Password</span>
+          <span class="input-with-toggle">
+            <input id="password" name="password" type="password" autocomplete="current-password" required>
+            <button type="button" class="password-toggle" data-password-toggle="password" aria-label="Show password">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            </button>
+          </span>
+        </label>
+        <button type="submit" class="btn btn-primary auth-submit">SIGN IN</button>
+        <p id="form-message" class="form-message" role="alert" aria-live="polite"></p>
       </form>
-      <p><a href="{{ url_for('register') }}">Create an account</a></p>
-    </main>
-  </body>
-</html>
+      <div class="auth-links">
+        <a href="{{ url_for('forgot_password') }}">Forgot your password?</a>
+        <a href="{{ url_for('register') }}">Create an account</a>
+      </div>
+    </section>
+  </main>
+{% endblock %}
