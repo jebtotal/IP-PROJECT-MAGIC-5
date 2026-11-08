@@ -13,30 +13,29 @@
   <section class="dashboard-intro">
     <div>
       <span class="eyebrow"><span class="status-dot"></span> YOUR WORKSPACE</span>
-      <h2>Welcome, {{ profile.full_name or profile.email }}.</h2>
-      <p>Choose a module you are allowed to view.</p>
+      <h2>Welcome, {{ profile.full_name or profile.email.split("@")[0] }}.</h2>
+      <p>Choose a module to continue.</p>
     </div>
-    <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
   </section>
   {% if permission_error %}
     <p class="notice" role="alert">{{ permission_error }}</p>
   {% endif %}
   <section class="module-grid" aria-label="Modules available to your account">
     {% for module in module_cards %}
-      <article class="module-tile glass-panel glow-hover" data-module="{{ module.slug }}">
+      <a class="module-tile glass-panel glow-hover" data-module="{{ module.slug }}" href="{{ '/' ~ module.slug }}">
         <div class="module-icon">
-          <i class="fa-solid {{ module_icons.get(module.name, 'fa-cubes-stacked') }}" aria-hidden="true"></i>
+          <i class="fa-solid {{ module.icon or module_icons.get(module.name, 'fa-cubes-stacked') }}" aria-hidden="true"></i>
         </div>
-        <span class="module-status">ACCESS GRANTED</span>
+        <span class="module-status">QUICK ACTION</span>
         <h3>{{ module.name }}</h3>
-        <p>This module is available based on your assigned rights.</p>
+        <p>Open {{ module.name }} workspace.</p>
         <div class="module-actions" aria-label="Available actions">
           {% for action, allowed in module.actions.items() %}
             {% if allowed %}<span>{{ action|title }}</span>{% endif %}
           {% endfor %}
         </div>
-        <span class="coming-soon">Module workspace coming soon</span>
-      </article>
+        <span class="coming-soon">Open workspace <i class="fa-solid fa-arrow-right" aria-hidden="true"></i></span>
+      </a>
     {% else %}
       <p class="empty-state">No modules are assigned to your account.</p>
     {% endfor %}

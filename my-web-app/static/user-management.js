@@ -11,8 +11,25 @@ const editUserDialog = document.querySelector("#edit-user-dialog");
 const editUserForm = document.querySelector("#edit-user-form");
 const editUserName = document.querySelector("#edit-user-name");
 const editUserMessage = document.querySelector("#edit-user-message");
-const rightsModules = ["Customer", "Product", "Human Resources", "Sales", "Reports"];
-const rightsActions = ["view", "create", "edit", "delete"];
+const rightsModules = [
+  {code: "customers", name: "Customer"},
+  {code: "products", name: "Product"},
+  {code: "hr", name: "Human Resources"},
+  {code: "sales", name: "Sales"},
+  {code: "reports", name: "Reports"},
+];
+const rightResourceLabels = {
+  customers: "Customers",
+  products: "Products",
+  jobs: "Job",
+  departments: "Department",
+  employees: "Employee",
+  job_history: "Job History",
+  sales: "Sale",
+  sale_details: "Sale Detail",
+  top_customers: "Top Customers",
+  products_master: "Product Master List",
+};
 let rightsTarget = null;
 let editUserTarget = null;
 
@@ -48,43 +65,62 @@ function addBadge(cell, value, className) {
   cell.replaceChildren(badge);
 }
 
-function renderRights(permissions) {
+function renderRights(catalog, selected) {
   rightsMatrix.replaceChildren();
   for (const module of rightsModules) {
+    const moduleRights = catalog.filter((right) => right.module_code === module.code);
     const section = document.createElement("fieldset");
     section.className = "rights-group";
     const legend = document.createElement("legend");
     const moduleToggle = document.createElement("input");
     moduleToggle.type = "checkbox";
-    moduleToggle.setAttribute("aria-label", `Select all ${module} actions`);
-    moduleToggle.dataset.moduleToggle = module;
-    moduleToggle.checked = rightsActions.every((action) => permissions[module][action]);
-    moduleToggle.indeterminate =
-      !moduleToggle.checked && rightsActions.some((action) => permissions[module][action]);
+    moduleToggle.setAttribute("aria-label", `${module.name} View`);
+    moduleToggle.dataset.viewToggle = module.code;
+    const viewRight = moduleRights.find((right) => right.action === "view");
+    moduleToggle.disabled = !viewRight;
+    moduleToggle.checked = Boolean(viewRight && selected.includes(viewRight.right_code));
     moduleToggle.addEventListener("change", () => {
-      section.querySelectorAll("input[data-action]").forEach((checkbox) => {
-        checkbox.checked = moduleToggle.checked;
-      });
+      const checkbox = section.querySelector(`input[data-right="${CSS.escape(viewRight.right_code)}"]`);
+      if (checkbox) checkbox.checked = moduleToggle.checked;
     });
-    legend.append(moduleToggle, document.createTextNode(` ${module}`));
+    legend.append(moduleToggle, document.createTextNode(` ${module.name}`));
     section.appendChild(legend);
-    for (const action of rightsActions) {
+
+    const controls = document.createElement("div");
+    controls.className = "rights-group-controls";
+    for (const value of ["All", "None"]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-secondary";
+      button.textContent = value;
+      button.addEventListener("click", () => {
+        section.querySelectorAll("input[data-right]").forEach((checkbox) => {
+          checkbox.checked = value === "All";
+        });
+        moduleToggle.checked = Boolean(viewRight && value === "All");
+      });
+      controls.appendChild(button);
+    }
+    section.appendChild(controls);
+
+    for (const right of moduleRights) {
       const label = document.createElement("label");
       label.className = "rights-option";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
-      checkbox.setAttribute("aria-label", `${module}: ${action}`);
-      checkbox.dataset.module = module;
-      checkbox.dataset.action = action;
-      checkbox.checked = permissions[module][action];
+      const resource = rightResourceLabels[right.resource_code] ||
+        right.resource_code.replaceAll("_", " ");
+      const action = right.action[0].toUpperCase() + right.action.slice(1);
+      const rightLabel = right.action === "view"
+        ? `${resource} ${action}`
+        : `${action} ${resource}`;
+      checkbox.setAttribute("aria-label", `${module.name}: ${rightLabel}`);
+      checkbox.dataset.right = right.right_code;
+      checkbox.checked = selected.includes(right.right_code);
       checkbox.addEventListener("change", () => {
-        const values = [...section.querySelectorAll("input[data-action]")].map(
-          (actionCheckbox) => actionCheckbox.checked,
-        );
-        moduleToggle.checked = values.every(Boolean);
-        moduleToggle.indeterminate = !moduleToggle.checked && values.some(Boolean);
+        if (right.action === "view") moduleToggle.checked = checkbox.checked;
       });
-      label.append(checkbox, document.createTextNode(action[0].toUpperCase() + action.slice(1)));
+      label.append(checkbox, document.createTextNode(rightLabel));
       section.appendChild(label);
     }
     rightsMatrix.appendChild(section);
@@ -92,16 +128,8 @@ function renderRights(permissions) {
 }
 
 function readRights() {
-  const permissions = {};
-  for (const module of rightsModules) {
-    permissions[module] = {};
-    for (const action of rightsActions) {
-      permissions[module][action] = rightsMatrix.querySelector(
-        `input[data-module="${CSS.escape(module)}"][data-action="${action}"]`,
-      ).checked;
-    }
-  }
-  return permissions;
+  return [...rightsMatrix.querySelectorAll("input[data-right]:checked")]
+    .map((checkbox) => checkbox.dataset.right);
 }
 
 async function openRights(user) {
@@ -110,7 +138,7 @@ async function openRights(user) {
   rightsMessage.textContent = "";
   try {
     const result = await request(`/api/users/${user.id}/permissions`);
-    renderRights(result.permissions);
+    renderRights(result.catalog, result.selected);
     rightsDialog.showModal();
   } catch (error) {
     showMessage(usersMessage, error instanceof Error ? error.message : "Rights could not be loaded.");
@@ -118,9 +146,11 @@ async function openRights(user) {
 }
 
 function setAllRights(value) {
-  rightsMatrix.querySelectorAll("input[type=checkbox]").forEach((checkbox) => {
+  rightsMatrix.querySelectorAll("input[data-right]").forEach((checkbox) => {
     checkbox.checked = value;
-    checkbox.indeterminate = false;
+  });
+  rightsMatrix.querySelectorAll("input[data-view-toggle]").forEach((checkbox) => {
+    checkbox.checked = value && !checkbox.disabled;
   });
 }
 
@@ -135,7 +165,7 @@ rightsForm.addEventListener("submit", async (event) => {
   try {
     await request(`/api/users/${rightsTarget.id}/permissions`, {
       method: "PATCH",
-      body: JSON.stringify({permissions: readRights()}),
+      body: JSON.stringify({rights: readRights()}),
     });
 
     rightsDialog.close();
@@ -198,6 +228,12 @@ function renderUsers(users) {
 
     const actionsCell = document.createElement("td");
     actionsCell.dataset.label = "Actions";
+    if (window.isAdmin && user.role !== "user") {
+      actionsCell.textContent = "—";
+      row.appendChild(actionsCell);
+      usersTable.appendChild(row);
+      continue;
+    }
     const actions = document.createElement("div");
     actions.className = "table-actions";
     const editButton = document.createElement("button");
