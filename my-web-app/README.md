@@ -96,14 +96,31 @@ The HOPE schema is split into timestamp-ordered migrations:
   this migration does not change that separate write contract. Do not set
   `app.username` in a separate pooled API call; any explicit setting must be
   transaction-local to the audited statement.
+- `20261108000100_hope_operational_tables_preserve_audit.sql` creates the ten
+  HOPE operational tables without changing `audit_log`. Use it when the
+  project already has the application's `audit_log` table, whose schema is
+  different from the source HOPE audit table. It stops on partial or
+  conflicting HOPE operational schemas and enables RLS on the new tables
+  without adding client access policies.
+- `20261109000000_hope_app_access.sql` adds the app's soft-delete fields,
+  active-row views, audit triggers compatible with the existing application
+  `audit_log`, and row-level access policies. Approved users need the matching
+  module/action permission; administrators have access to all HOPE records.
+  It also prevents users from changing their own profile role through the
+  public API.
   Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
   migrations to test add/edit/soft-delete attribution and the fallback; it
   rolls back test rows.
 
-Apply the files in filename order, only after confirming the target project and
-reviewing existing HOPE relations. The base migration does not touch the
-`profiles` table or Supabase Auth data used by login and registration. The
-repository does not connect to or inspect the live database automatically.
+Confirm the target project and review existing HOPE relations before applying
+SQL. On a project with the application's different `audit_log` table, run
+`20261108000100_hope_operational_tables_preserve_audit.sql` followed by the
+sample-data migration, then `20261109000000_hope_app_access.sql`. Do not run
+the base-table migration or the source HOPE audit-support migration until
+they have been adapted for that audit schema. Otherwise, apply the migrations
+in filename order. The base migration does not touch the `profiles` table or
+Supabase Auth data used by login and registration. The repository does not
+connect to or inspect the live database automatically.
 
 Do not invent or rerun a migration based only on the description above; ask the
 database administrator for the authoritative SQL if it is not available.
