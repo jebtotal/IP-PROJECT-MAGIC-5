@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="ERP MAGIC-5 web application">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='erp-logo.png') }}">
+    <title>{% block title %}ERP MAGIC-5{% endblock %}</title>
+    <script>
+      const root = document.documentElement;
+      try {
+        root.classList.toggle("dark", localStorage.getItem("erp-theme") !== "light");
+        const sidebar = JSON.parse(localStorage.getItem("erp-sidebar") || "{}");
+        const width = Number.isFinite(sidebar.width) ? Math.min(320, Math.max(72, sidebar.width)) : 272;
+        const collapsed = Boolean(sidebar.collapsed);
+        root.dataset.sidebarCollapsed = String(collapsed);
+        root.style.setProperty("--sidebar-width", collapsed ? "72px" : `${width}px`);
+      } catch {
+        root.classList.add("dark");
+        root.dataset.sidebarCollapsed = "false";
+        root.style.setProperty("--sidebar-width", "272px");
+      }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"DM Sans"', "system-ui", "sans-serif"] },
+            colors: {
+              brand: {
+                50: "#ecfdf5",
+                100: "#d1fae5",
+                200: "#a7f3d0",
+                500: "#10b981",
+                600: "#059669",
+                700: "#047857",
+                800: "#065f46",
+                900: "#064e3b",
+              },
+              indigo: { 400: "#f97316", 500: "#ea580c", 600: "#c2410c" },
+              sky: { 400: "#fb923c", 500: "#f97316" },
+              slate: {
+                50: "#f5f5f4",
+                100: "#e7e5e4",
+                200: "#d6d3d1",
+                300: "#a8a29e",
+                400: "#78716c",
+                500: "#57534e",
+                600: "#44403c",
+                700: "#292524",
+                800: "#1c1917",
+                850: "#171412",
+                900: "#0c0a09",
+                950: "#000000",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap"
+      rel="stylesheet"
+    >
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    >
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='7') }}">
+    {% block head_scripts %}{% endblock %}
+  </head>
+  <body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
+    {% if profile %}
+      <div class="app-shell">
+        <aside class="workspace-sidebar" id="app-sidebar">
+          <div class="sidebar-header">
+            <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="ERP MAGIC-5 dashboard" title="ERP MAGIC-5">
+              <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+              <span>ERP MAGIC-5</span>
+            </a>
+            <button
+              type="button"
+              class="icon-button sidebar-collapse-toggle"
+              data-sidebar-collapse
+              aria-label="Collapse sidebar"
+              aria-expanded="true"
+              title="Collapse sidebar"
+            >
+              <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+            </button>
+          </div>
+          <p class="sidebar-caption">WORKSPACE</p>
+          <nav class="sidebar-nav" aria-label="Main navigation">
+            <a
+              href="{{ url_for('index') }}"
+              class="sidebar-link{% if request.endpoint == 'index' %} is-active{% endif %}"
+              aria-label="Dashboard"
+              title="Dashboard"
+            >
+              <i class="fa-solid fa-grid-2" aria-hidden="true"></i>
+              <span>Dashboard</span>
+            </a>
+            {% if profile.role in ("admin", "superadmin") %}
+              <a
+                href="{{ url_for('user_management') }}"
+                class="sidebar-link{% if request.endpoint == 'user_management' %} is-active{% endif %}"
+                aria-label="User Management"
+                title="User Management"
+              >
+                <i class="fa-solid fa-users" aria-hidden="true"></i>
+                <span>User Management</span>
+              </a>
+            {% endif %}
+          </nav>
+          <div class="sidebar-user">
+            <div class="user-avatar" aria-hidden="true">
+              {{ (profile.full_name or profile.email)[0]|upper }}
+            </div>
+            <div class="user-summary">
+              <strong>{{ profile.full_name or profile.email }}</strong>
+              <span>{{ profile.email }}</span>
+            </div>
+            <form action="{{ url_for('logout') }}" method="post">
+              <button type="submit" class="icon-button logout-button" aria-label="Log out" title="Log out">
+                <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+              </button>
+            </form>
+          </div>
+        </aside>
+        <div class="workspace-main">
+          <header class="workspace-header">
+            <button
+              type="button"
+              class="icon-button sidebar-toggle"
+              data-sidebar-toggle
+              aria-label="Toggle navigation"
+              aria-controls="app-sidebar"
+              aria-expanded="false"
+            >
+              <i class="fa-solid fa-bars" aria-hidden="true"></i>
+            </button>
+            <div class="header-title">
+              <span>ERP MAGIC-5 / WORKSPACE</span>
+            </div>
+            <div class="header-actions">
+              <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
+              <button
+                type="button"
+                class="icon-button theme-toggle"
+                data-theme-toggle
+                aria-label="Toggle light and dark theme"
+                title="Toggle theme"
+              >
+                <i class="fa-solid fa-moon" aria-hidden="true"></i>
+                <i class="fa-solid fa-sun" aria-hidden="true"></i>
+              </button>
+            </div>
+          </header>
+          <main class="workspace-content">
+            {% block content %}{% endblock %}
+          </main>
+        </div>
+        <div
+          class="sidebar-resize"
+          data-sidebar-resize
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          aria-valuemin="72"
+          aria-valuemax="320"
+          aria-valuenow="272"
+          tabindex="0"
+          title="Drag to resize; double-click to reset"
+        ></div>
+      </div>
+    {% else %}
+      {% block guest_content %}{% endblock %}
+    {% endif %}
+
+    <div id="toast-container" class="toast-container" aria-live="polite">
+      {% for category, message in get_flashed_messages(with_categories=true) %}
+        <p class="toast-message toast-{{ category }}">{{ message }}</p>
+      {% endfor %}
+    </div>
+
+    <dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title">
+      <div class="confirm-card glass-panel">
+        <div class="confirm-icon"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i></div>
+        <h2 id="confirm-title">Please confirm</h2>
+        <p id="confirm-message"></p>
+        <div class="dialog-actions">
+          <button type="button" class="btn btn-secondary" data-confirm-cancel>Cancel</button>
+          <button type="button" class="btn btn-danger" data-confirm-accept>Confirm</button>
+        </div>
+      </div>
+    </dialog>
+    <script>
+      (() => {
+        const modalByPath = {
+          "/login": "login",
+          "/register": "register",
+          "/forgot-password": "forgot",
+          "/reset-password": "reset",
+          "/set-password": "set_password",
+        };
+        const modal = modalByPath[window.location.pathname];
+        if (modal && !document.getElementById("auth-modal-overlay")) {
+          const target = new URL("/", window.location.origin);
+          target.searchParams.set("authModal", modal);
+          const token = new URLSearchParams(window.location.search).get("token");
+          if (modal === "reset" && token) target.searchParams.set("token", token);
+          window.location.replace(`${target.pathname}${target.search}`);
+        }
+      })();
+    </script>
+    <script src="{{ url_for('static', filename='theme.js', v='4') }}" defer></script>
+    {% block page_scripts %}{% endblock %}
+  </body>
+</html>

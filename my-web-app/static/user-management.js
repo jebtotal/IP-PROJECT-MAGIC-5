@@ -32,20 +32,31 @@ async function request(url, options = {}) {
   return result;
 }
 
-function addCell(row, value) {
+function addCell(row, value, label, title = "") {
   const cell = document.createElement("td");
+  cell.dataset.label = label;
   cell.textContent = value;
+  if (title) cell.title = title;
   row.appendChild(cell);
   return cell;
+}
+
+function addBadge(cell, value, className) {
+  const badge = document.createElement("span");
+  badge.className = className;
+  badge.textContent = value;
+  cell.replaceChildren(badge);
 }
 
 function renderRights(permissions) {
   rightsMatrix.replaceChildren();
   for (const module of rightsModules) {
     const section = document.createElement("fieldset");
+    section.className = "rights-group";
     const legend = document.createElement("legend");
     const moduleToggle = document.createElement("input");
     moduleToggle.type = "checkbox";
+    moduleToggle.setAttribute("aria-label", `Select all ${module} actions`);
     moduleToggle.dataset.moduleToggle = module;
     moduleToggle.checked = rightsActions.every((action) => permissions[module][action]);
     moduleToggle.indeterminate =
@@ -62,6 +73,7 @@ function renderRights(permissions) {
       label.className = "rights-option";
       const checkbox = document.createElement("input");
       checkbox.type = "checkbox";
+      checkbox.setAttribute("aria-label", `${module}: ${action}`);
       checkbox.dataset.module = module;
       checkbox.dataset.action = action;
       checkbox.checked = permissions[module][action];
@@ -167,26 +179,44 @@ function renderUsers(users) {
   usersTable.replaceChildren();
   for (const user of users) {
     const row = document.createElement("tr");
-    addCell(row, user.full_name || "—");
-    addCell(row, user.email || "—");
-    addCell(row, user.role);
-    addCell(row, user.status);
+    addCell(row, user.full_name || "—", "Name", user.full_name || "");
+    addCell(row, user.email || "—", "Email", user.email || "");
+    const roleCell = addCell(row, "", "Role");
+    const roleClass = {
+      user: "role-user-badge",
+      admin: "role-admin-badge",
+      superadmin: "role-superadmin-badge",
+    }[user.role] || "";
+    addBadge(roleCell, user.role, `status-badge ${roleClass}`.trim());
+    const statusCell = addCell(row, "", "Status");
+    const statusClass = {
+      approved: "status-approved",
+      pending: "status-pending",
+      blocked: "status-blocked",
+    }[user.status] || "";
+    addBadge(statusCell, user.status, `status-badge ${statusClass}`.trim());
 
-    const actions = document.createElement("td");
+    const actionsCell = document.createElement("td");
+    actionsCell.dataset.label = "Actions";
+    const actions = document.createElement("div");
+    actions.className = "table-actions";
     const editButton = document.createElement("button");
     editButton.type = "button";
+    editButton.className = "btn btn-secondary";
     editButton.textContent = "Edit";
     editButton.addEventListener("click", () => editUser(user));
     actions.appendChild(editButton);
 
     const rightsButton = document.createElement("button");
     rightsButton.type = "button";
+    rightsButton.className = "btn btn-secondary";
     rightsButton.textContent = "Rights";
     rightsButton.addEventListener("click", () => openRights(user));
     actions.appendChild(rightsButton);
 
     const statusButton = document.createElement("button");
     statusButton.type = "button";
+    statusButton.className = "btn btn-secondary";
     statusButton.textContent =
       user.status === "pending" ? "Approve" :
       user.status === "blocked" ? "Unblock" : "Block";
@@ -196,6 +226,7 @@ function renderUsers(users) {
     if (window.isSuperadmin && user.role !== "admin") {
       const adminButton = document.createElement("button");
       adminButton.type = "button";
+      adminButton.className = "btn btn-secondary";
       adminButton.textContent = "Make Admin";
       adminButton.addEventListener("click", () => updateRole(user, "admin"));
       actions.appendChild(adminButton);
@@ -204,6 +235,7 @@ function renderUsers(users) {
     if (window.isSuperadmin && user.role === "admin") {
       const userButton = document.createElement("button");
       userButton.type = "button";
+      userButton.className = "btn btn-secondary";
       userButton.textContent = "Make User";
       userButton.addEventListener("click", () => updateRole(user, "user"));
       actions.appendChild(userButton);
@@ -212,11 +244,13 @@ function renderUsers(users) {
     if (window.isSuperadmin) {
       const removeButton = document.createElement("button");
       removeButton.type = "button";
+      removeButton.className = "btn btn-danger";
       removeButton.textContent = "Remove";
       removeButton.addEventListener("click", () => removeUser(user));
       actions.appendChild(removeButton);
     }
-    row.appendChild(actions);
+    actionsCell.appendChild(actions);
+    row.appendChild(actionsCell);
     usersTable.appendChild(row);
   }
 }
@@ -267,7 +301,7 @@ async function updateRole(user, role) {
 }
 
 async function removeUser(user) {
-  if (!window.confirm(`Remove ${user.email}? This cannot be undone.`)) {
+  if (!(await window.confirmAction(`Remove ${user.email}? This cannot be undone.`))) {
     return;
   }
   try {
