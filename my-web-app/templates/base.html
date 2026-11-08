@@ -107,7 +107,7 @@
             {% for module in sidebar_modules|default([]) %}
               <a
                 href="{{ '/' ~ module.slug }}"
-                class="sidebar-link{% if request.path == '/' ~ module.slug %} is-active{% endif %}"
+                class="sidebar-link{% if request.path == ('/' ~ module.slug) %} is-active{% endif %}"
                 aria-label="{{ module.name }}"
                 title="{{ module.name }}"
               >

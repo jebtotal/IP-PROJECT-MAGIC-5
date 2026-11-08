@@ -151,15 +151,31 @@ through the application.
 
 Administrators can assign View, Create, Edit, and Delete rights for Customer,
 Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
-are stored in `user_permissions` and recorded in `audit_log`. Apply the
-corresponding Supabase schema for those tables after the profiles migration.
-The normalized `user_permission` catalogue is additive and is not yet a
-replacement for the JSON permissions used by the current application. The
-new `blocked` column is not yet consulted by the login handler; existing
-`status` checks remain unchanged until a separately reviewed application
-change. This migration leaves both the existing `user_permissions` and
-`audit_log` tables untouched; verify the deployed audit-log columns separately
-before relying on the application's rights-change audit writes.
+Product, Human Resources, Sales, and Reports from the Rights dialog. Admins and
+superadmins have implicit full access to all five modules. User rights are read
+from the active `user_permission` assignments and the `right_catalog`, with the
+legacy JSON `user_permissions` record kept synchronized for compatibility.
+Rights changes are recorded in `audit_log`; verify the deployed tables and
+policies if the app reports that rights need database setup.
+
+The checked-in catalogue currently has 30 rights. It does not yet include
+Product Price Add/Edit/Delete; Job History Add/Edit/Delete; or the Reports
+rights Top Products, Active Employees, All Employees, Employee Job History,
+and Top Sales. These require a DB Admin catalogue update; the app does not edit
+the database schema or seed data.
+
+Customers are available at `/customers`. The shared record list reads
+`customer_active` for active rows and uses the existing `is_deleted`, `stamp`,
+and audit triggers for administrator status, restore, and record history.
+CRUD requests use the authenticated Supabase client so RLS remains in effect.
+If the active view, table access, or policies are unavailable, the UI reports
+that database setup is needed. Products, Human Resources, Sales, and Reports
+currently show a Coming soon page.
+
+The new `blocked` column is not yet consulted by the login handler; existing
+`status` checks remain in effect. The access-control migration leaves existing
+`user_permissions` and `audit_log` tables untouched, so verify their deployed
+columns and policies against the application contract.
 
 Password recovery is available at `/forgot-password`. Reset links use an
 `itsdangerous` signed token that expires after one hour; they are not yet
@@ -173,7 +189,9 @@ WHERE used_at IS NOT NULL OR expires_at <= now()
 ORDER BY expires_at;
 ```
 
-The signed-in home page exposes only modules with View permission. Use
-`GET /api/modules/<module>/<action>` for a server-side permission check before
-module actions; module slugs are `customer`, `product`, `human-resources`,
-`sales`, and `reports`.
+The signed-in home page and sidebar expose only modules with View permission
+for regular users. Admins and superadmins see all modules. Module workspaces
+are server-guarded at `/customers`, `/products`, `/human-resources`, `/sales`,
+and `/reports`. Use `GET /api/modules/<module>/<action>` for a server-side
+permission check; API module slugs are `customer`, `product`,
+`human-resources`, `sales`, and `reports`.

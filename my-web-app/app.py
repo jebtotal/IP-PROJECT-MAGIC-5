@@ -43,12 +43,70 @@ MODULE_SLUGS = {
     "Reports": "reports",
 }
 WORKSPACE_MODULES = (
-    {"name": "Customer", "slug": "customers", "permission": "Customer", "icon": "fa-address-book"},
-    {"name": "Product", "slug": "products", "permission": "Product", "icon": "fa-boxes-stacked"},
-    {"name": "Human Resources", "slug": "human-resources", "permission": "Human Resources", "icon": "fa-id-card"},
+    {
+        "name": "Customer",
+        "slug": "customers",
+        "permission": "Customer",
+        "icon": "fa-address-book",
+    },
+    {
+        "name": "Product",
+        "slug": "products",
+        "permission": "Product",
+        "icon": "fa-boxes-stacked",
+    },
+    {
+        "name": "Human Resources",
+        "slug": "human-resources",
+        "permission": "Human Resources",
+        "icon": "fa-id-card",
+    },
     {"name": "Sales", "slug": "sales", "permission": "Sales", "icon": "fa-cart-shopping"},
     {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
 )
+RECORD_MODULES = {
+    "customers": {
+        "name": "Customers",
+        "singular": "Customer",
+        "permission": "Customer",
+        "table": "customer",
+        "active_view": "customer_active",
+        "key": "custno",
+        "key_field": "custNo",
+        "display_field": "custName",
+        "fields": (
+            {
+                "name": "custNo",
+                "column": "custno",
+                "label": "Customer No",
+                "maxlength": 5,
+                "required": True,
+            },
+            {
+                "name": "custName",
+                "column": "custname",
+                "label": "Customer Name",
+                "maxlength": 20,
+                "required": True,
+            },
+            {
+                "name": "address",
+                "column": "address",
+                "label": "Address",
+                "maxlength": 50,
+                "required": False,
+            },
+            {
+                "name": "payTerms",
+                "column": "payterm",
+                "label": "Payment Terms",
+                "maxlength": 3,
+                "required": True,
+                "options": ("COD", "30D", "45D"),
+            },
+        ),
+    },
+}
 
 
 def get_supabase_client():
@@ -297,7 +355,7 @@ def index():
         return redirect(url_for("set_password"))
     try:
         permissions = get_permissions_for_user(client, profile)
-    except (httpx.HTTPError, KeyError, TypeError):
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
         app.logger.exception("Workspace permissions could not be loaded")
         permissions = empty_permissions()
         permission_error = "Modules are unavailable until permissions are configured."
@@ -318,7 +376,7 @@ def api_check_module_permission(module, action):
     if client is None:
         return jsonify(error="You must be logged in."), 401
     profile = get_current_profile(client)
-    if profile is None:
+    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
         return jsonify(error="Profile not found."), 403
     module_name = next(
         (name for name, slug in MODULE_SLUGS.items() if slug == module),
@@ -328,7 +386,7 @@ def api_check_module_permission(module, action):
         return jsonify(error="Unknown module or action."), 400
     try:
         permissions = get_permissions_for_user(client, profile)
-    except (httpx.HTTPError, KeyError, TypeError):
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
         app.logger.exception("Module permission check failed")
         return jsonify(error="Permissions could not be checked."), 503
     if not has_permission(permissions, module_name, action):
@@ -349,6 +407,9 @@ def module_workspace():
     if profile is None:
         session.clear()
         return redirect(url_for("login"))
+    if profile.get("status") in {"blocked", "rejected", "pending"}:
+        session.clear()
+        return redirect(url_for("login"))
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
 
@@ -358,7 +419,7 @@ def module_workspace():
         return redirect(url_for("index"))
     try:
         permissions = get_permissions_for_user(client, profile)
-    except (httpx.HTTPError, KeyError, TypeError):
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
         app.logger.exception("Module workspace permissions could not be loaded")
         return render_template(
             "module_workspace.html",
@@ -370,6 +431,16 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
+    if allowed and slug == "customers":
+        record_config = RECORD_MODULES["customers"]
+        return render_template(
+            "record_list.html",
+            profile=profile,
+            module=module,
+            record_config=record_config,
+            is_admin=profile["role"] in {"admin", "superadmin"},
+            sidebar_modules=module_cards(permissions),
+        )
     return render_template(
         "module_workspace.html",
         profile=profile,
@@ -389,7 +460,7 @@ def user_management():
         return redirect(url_for("index"))
     try:
         sidebar_modules = module_cards(get_permissions_for_user(client, profile))
-    except (httpx.HTTPError, KeyError, TypeError):
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
         app.logger.exception("Sidebar permissions could not be loaded")
         sidebar_modules = []
     return render_template(
@@ -398,6 +469,233 @@ def user_management():
         is_superadmin=profile["role"] == "superadmin",
         sidebar_modules=sidebar_modules,
     )
+
+
+def get_record_access(module_slug, action):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, (jsonify(error="You must be logged in."), 401)
+    profile = get_current_profile(client)
+    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
+        return None, None, None, (jsonify(error="This account is not active."), 403)
+    config = RECORD_MODULES.get(module_slug)
+    if config is None:
+        return None, None, None, (jsonify(error="Unknown module."), 404)
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (APIError, httpx.HTTPError):
+        app.logger.exception("Record permissions could not be loaded")
+        return None, None, None, (
+            jsonify(error="Module access needs database setup or could not be checked."),
+            503,
+        )
+    if not has_permission(permissions, config["permission"], "view"):
+        return None, None, None, (
+            jsonify(error="View access is required for this module."),
+            403,
+        )
+    if not has_permission(permissions, config["permission"], action):
+        return None, None, None, (
+            jsonify(error="You do not have permission for this action."),
+            403,
+        )
+    return client, profile, config, None
+
+
+def record_error_response(error, config):
+    app.logger.exception("Record request could not be completed")
+    if isinstance(error, (APIError, RuntimeError)):
+        return jsonify(error=f"{config['name']} data needs database setup or is blocked by access policies."), 503
+    return jsonify(error=f"{config['name']} request could not be completed. Please try again."), 502
+
+
+def record_form_values(config, payload, editing=False):
+    if not isinstance(payload, Mapping):
+        return None, f"Submit {config['name'].lower()} details."
+    valid_names = {field["name"] for field in config["fields"]}
+    if editing:
+        valid_names.remove(config["key_field"])
+    if set(payload) != valid_names:
+        return None, f"{config['singular']} details are incomplete or contain unsupported fields."
+    values = {}
+    for field in config["fields"]:
+        name = field["name"]
+        if editing and name == config["key_field"]:
+            continue
+        value = payload.get(name)
+        if not isinstance(value, str):
+            return None, f"{field['label']} is required."
+        value = value.strip()
+        if field["required"] and not value:
+            return None, f"{field['label']} is required."
+        if len(value) > field["maxlength"]:
+            return None, f"{field['label']} must be {field['maxlength']} characters or fewer."
+        if field.get("options") and value not in field["options"]:
+            return None, f"Choose valid {field['label'].lower()}."
+        values[field["column"]] = value or None
+    return values, None
+
+
+@app.get("/api/records/<module_slug>")
+def api_list_records(module_slug):
+    client, profile, config, error = get_record_access(module_slug, "view")
+    if error:
+        return error
+
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    business_columns = [field["column"] for field in config["fields"]]
+    admin_columns = business_columns + ["is_deleted", "stamp"]
+    try:
+        active = client.table(config["active_view"]).select(
+            ", ".join(admin_columns if is_admin else business_columns)
+        ).execute()
+        active_rows = active.data or []
+        inactive_rows = []
+        if is_admin:
+            inactive = (
+                client.table(config["table"])
+                .select(", ".join(admin_columns))
+                .eq("is_deleted", True)
+                .execute()
+            )
+            inactive_rows = inactive.data or []
+        counts = {"active": len(active_rows), "inactive": len(inactive_rows)}
+        counts["all"] = counts["active"] + counts["inactive"]
+        rows = (
+            active_rows if status_filter == "active"
+            else inactive_rows if status_filter == "inactive"
+            else active_rows + inactive_rows
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if any(search in str(row.get(column) or "").casefold() for column in business_columns)
+        ]
+    records = []
+    for row in rows:
+        record = {
+            field["name"]: row.get(field["column"])
+            for field in config["fields"]
+        }
+        if is_admin:
+            record.update(
+                isDeleted=row.get("is_deleted") is True,
+                stamp=row.get("stamp"),
+            )
+        records.append(record)
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (APIError, httpx.HTTPError):
+        app.logger.exception("Record action permissions could not be loaded")
+        return jsonify(error="Module access needs database setup or could not be checked."), 503
+    actions = permissions[config["permission"]]
+    return jsonify(
+        records=records,
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            "create": actions["create"],
+            "edit": actions["edit"],
+            "delete": actions["delete"],
+        },
+    )
+
+
+@app.post("/api/records/<module_slug>")
+def api_create_record(module_slug):
+    client, profile, config, error = get_record_access(module_slug, "create")
+    if error:
+        return error
+    values, validation_error = record_form_values(config, get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.table(config["table"]).insert(values).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    return jsonify(message=f"{config['singular']} added.", record=response.data[0] if response.data else None), 201
+
+
+@app.patch("/api/records/<module_slug>/<record_id>")
+def api_edit_record(module_slug, record_id):
+    client, profile, config, error = get_record_access(module_slug, "edit")
+    if error:
+        return error
+    values, validation_error = record_form_values(config, get_user_payload(), editing=True)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        current = (
+            client.table(config["table"])
+            .select("is_deleted")
+            .eq(config["key"], record_id)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error=f"{config['singular']} not found."), 404
+        if current.data.get("is_deleted"):
+            return jsonify(error=f"Restore this {config['singular'].lower()} before editing."), 409
+        response = (
+            client.table(config["table"])
+            .update(values)
+            .eq(config["key"], record_id)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    return jsonify(message=f"{config['singular']} updated.", record=response.data[0] if response.data else None)
+
+
+@app.patch("/api/records/<module_slug>/<record_id>/delete")
+def api_delete_record(module_slug, record_id):
+    client, profile, config, error = get_record_access(module_slug, "delete")
+    if error:
+        return error
+    try:
+        response = (
+            client.table(config["table"])
+            .update({"is_deleted": True})
+            .eq(config["key"], record_id)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    if not response.data:
+        return jsonify(error=f"{config['singular']} not found or already inactive."), 404
+    return jsonify(message=f"{config['singular']} moved to Inactive.")
+
+
+@app.patch("/api/records/<module_slug>/<record_id>/restore")
+def api_restore_record(module_slug, record_id):
+    client, profile, config, error = get_record_access(module_slug, "delete")
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive records."), 403
+    try:
+        response = (
+            client.table(config["table"])
+            .update({"is_deleted": False})
+            .eq(config["key"], record_id)
+            .eq("is_deleted", True)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    if not response.data:
+        return jsonify(error=f"Inactive {config['singular'].lower()} not found."), 404
+    return jsonify(message=f"{config['singular']} restored.")
 
 
 @app.get("/api/users")

@@ -398,7 +398,7 @@ a { color: inherit; }
 .auth-form,.form-grid { display: grid; gap: 1.15rem; }
 .field { display: grid; gap: 0.45rem; }
 .field-label { color: var(--text-muted); font-size: 0.65rem; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; }
-.field input,.form-grid input,.edit-user-form input {
+.field input,.form-grid input,.form-grid select,.edit-user-form input {
   width: 100%;
   min-height: 2.9rem;
   padding: 0.75rem 0.9rem;
@@ -409,7 +409,7 @@ a { color: inherit; }
   color: var(--text-main);
   font-size: 0.85rem;
 }
-.field input:focus,.form-grid input:focus,.edit-user-form input:focus { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.13); }
+.field input:focus,.form-grid input:focus,.form-grid select:focus,.edit-user-form input:focus { border-color: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.13); }
 .input-with-toggle { position: relative; }
 .input-with-toggle input { padding-right: 3rem; }
 .password-toggle { position: absolute; top: 50%; right: 0.55rem; width: 2rem; height: 2rem; transform: translateY(-50%); border: 0; background: transparent; color: var(--text-muted); }
@@ -497,6 +497,24 @@ dialog { color: var(--text-main); }
 .rights-option input,#rights-matrix legend input { accent-color: #059669; }
 .rights-group-controls { display: flex; grid-column: 1 / -1; gap: 0.35rem; }
 .rights-group-controls .btn { min-height: 1.7rem; padding: 0.25rem 0.55rem; font-size: 0.6rem; }
+.record-panel { padding: clamp(0.9rem, 2vw, 1.4rem); }
+.record-toolbar { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
+.record-search { display: flex; width: min(100%, 28rem); min-width: 0; align-items: center; gap: 0.65rem; padding: 0 0.85rem; border: 1px solid var(--border-color); border-radius: 9999px; background: var(--bg-main); color: var(--text-muted); }
+.record-search input { width: 100%; min-width: 0; min-height: 2.7rem; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 0.78rem; }
+.record-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.85rem; }
+.record-tab { display: inline-flex; min-height: 2.2rem; align-items: center; gap: 0.45rem; padding: 0.45rem 0.8rem; border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); font-size: 0.68rem; font-weight: 800; }
+.record-tab span { padding: 0.1rem 0.4rem; border-radius: 9999px; background: rgba(120, 113, 108, 0.12); }
+.record-tab.is-active { border-color: transparent; background: linear-gradient(110deg, #059669, #c2410c); color: #fff; }
+.record-deleted { background: rgba(120, 113, 108, 0.08); color: var(--text-muted); }
+.record-status { font-weight: 800; }
+.record-field input,.record-field select { width: 100%; min-height: 2.9rem; padding: 0.75rem 0.9rem; border: 1px solid var(--border-color); border-radius: 0.85rem; outline: none; background: var(--bg-main); color: var(--text-main); font-size: 0.85rem; }
+.record-table th:nth-child(1) { width: 14%; }
+.record-table th:nth-child(2) { width: 18%; }
+.record-table th:nth-child(3) { width: 24%; }
+.record-table th:nth-child(4) { width: 12%; }
+.record-table th:nth-child(5) { width: 10%; }
+.record-table th:nth-child(6) { width: 12%; }
+.record-table th:nth-child(7) { width: 20%; }
 
 @media (max-width: 70rem) {
   .landing-links { gap: 1rem; font-size: 0.62rem; }
@@ -560,6 +578,9 @@ html[data-sidebar-collapsed="true"] .logout-button { width: 2rem; height: 2rem; 
   .management-table td[data-label="Actions"] { display: block; }
   .management-table td[data-label="Actions"]::before { display: block; margin-bottom: 0.4rem; }
   .table-actions { gap: 0.35rem; }
+  .record-toolbar { align-items: stretch; flex-direction: column; }
+  .record-search { width: 100%; }
+  .record-toolbar > .btn { align-self: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
