@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a problem so the team can reproduce and fix it.
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: "Please search existing issues before submitting a duplicate."
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the problem clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the steps that cause the problem.
+      placeholder: |
+        1. Go to ...
+        2. Select ...
+        3. See the error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and evidence
+      description: Include browser/device details, error messages, or screenshots if useful.
+    validations:
+      required: false
