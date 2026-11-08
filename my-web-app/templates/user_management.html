@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set page_title = "User Management" %}
-{% block title %}User Management | ERP MAGIC-5{% endblock %}
+{% block title %}User Management | PentadERP{% endblock %}
 {% block head_scripts %}
   <script>window.isSuperadmin = {{ "true" if is_superadmin else "false" }};</script>
   <script src="{{ url_for('static', filename='user-management.js', v='2') }}" defer></script>

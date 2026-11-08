@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% set page_title = "Dashboard" %}
-{% block title %}ERP MAGIC-5{% endblock %}
+{% block title %}PentadERP{% endblock %}
 
 {% block content %}
   {% set module_icons = {
@@ -49,7 +49,7 @@
       <div class="landing-nav-inner">
         <a href="#" class="landing-brand">
           <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
-          <span>ERP MAGIC-5</span>
+          <span>PentadERP</span>
         </a>
         <div class="landing-links" aria-label="Page sections">
           <a href="#features">Core Modules</a>
@@ -90,7 +90,7 @@
               <div class="preview-header">
                 <div class="preview-brand">
                   <span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-                  <strong>ERP MAGIC-5 Workspace</strong>
+                  <strong>PentadERP Workspace</strong>
                 </div>
                 <span class="preview-status"><span class="status-dot"></span> Sample</span>
               </div>
@@ -207,12 +207,12 @@
 
       <section id="about" class="landing-section">
         <div class="section-inner">
-          <div class="section-heading"><h2>About ERP MAGIC-5</h2></div>
-          <p class="about-copy">ERP MAGIC-5 is an ERP workspace for customer, product, human resources, and sales operations. Access to the workspace is determined by account role and assigned rights.</p>
+          <div class="section-heading"><h2>About PentadERP</h2></div>
+          <p class="about-copy">PentadERP is an ERP workspace for customer, product, human resources, and sales operations. Access to the workspace is determined by account role and assigned rights.</p>
         </div>
       </section>
     </main>
-    <footer class="landing-footer">© 2026 ERP MAGIC-5. All rights reserved.</footer>
+    <footer class="landing-footer">© 2026 PentadERP. All rights reserved.</footer>
   </div>
   {% include "_auth_modals.html" %}
 {% endblock %}

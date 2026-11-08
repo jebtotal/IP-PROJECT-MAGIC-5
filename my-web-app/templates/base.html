@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="ERP MAGIC-5 web application">
+    <meta name="description" content="PentadERP web application">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='erp-logo.png') }}">
-    <title>{% block title %}ERP MAGIC-5{% endblock %}</title>
+    <title>{% block title %}PentadERP{% endblock %}</title>
     <script>
       const root = document.documentElement;
       try {
@@ -78,9 +78,9 @@
       <div class="app-shell">
         <aside class="workspace-sidebar" id="app-sidebar">
           <div class="sidebar-header">
-            <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="ERP MAGIC-5 dashboard" title="ERP MAGIC-5">
+            <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="PentadERP dashboard" title="PentadERP">
               <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
-              <span>ERP MAGIC-5</span>
+              <span>PentadERP</span>
             </a>
             <button
               type="button"
@@ -144,7 +144,7 @@
               <i class="fa-solid fa-bars" aria-hidden="true"></i>
             </button>
             <div class="header-title">
-              <span>ERP MAGIC-5 / WORKSPACE</span>
+              <span>PentadERP / WORKSPACE</span>
             </div>
             <div class="header-actions">
               <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
