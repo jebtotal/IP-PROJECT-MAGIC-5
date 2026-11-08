@@ -2,7 +2,10 @@
 {% set page_title = "User Management" %}
 {% block title %}User Management | PentadERP{% endblock %}
 {% block head_scripts %}
-  <script>window.isSuperadmin = {{ "true" if is_superadmin else "false" }};</script>
+  <script>
+    window.isSuperadmin = {{ "true" if is_superadmin else "false" }};
+    window.isAdmin = {{ "true" if profile.role == "admin" else "false" }};
+  </script>
   <script src="{{ url_for('static', filename='user-management.js', v='2') }}" defer></script>
 {% endblock %}
 
@@ -19,7 +22,6 @@
         {% endif %}
       </p>
     </div>
-    <span class="role-badge">{{ profile.role|replace("_", " ")|title }}</span>
   </section>
 
   <div class="management-grid">
@@ -47,7 +49,7 @@
     <section class="management-panel glass-panel" aria-labelledby="users-heading">
       <h3 id="users-heading" class="panel-heading">Users</h3>
       <p id="users-message" class="table-message" role="status" aria-live="polite"></p>
-      <div class="table-wrap" tabindex="0" aria-label="Scrollable users table">
+      <div class="table-wrap" aria-label="Users table">
         <table class="management-table">
           <thead>
             <tr>

@@ -3,7 +3,6 @@
 import os
 import secrets
 import smtplib
-from copy import deepcopy
 from email.message import EmailMessage
 from collections.abc import Mapping
 
@@ -11,6 +10,7 @@ import httpx
 from dotenv import load_dotenv
 from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from postgrest.exceptions import APIError
 from supabase import create_client
 from supabase_auth.errors import AuthError, AuthRetryableError
 
@@ -42,6 +42,13 @@ MODULE_SLUGS = {
     "Sales": "sales",
     "Reports": "reports",
 }
+WORKSPACE_MODULES = (
+    {"name": "Customer", "slug": "customers", "permission": "Customer", "icon": "fa-address-book"},
+    {"name": "Product", "slug": "products", "permission": "Product", "icon": "fa-boxes-stacked"},
+    {"name": "Human Resources", "slug": "human-resources", "permission": "Human Resources", "icon": "fa-id-card"},
+    {"name": "Sales", "slug": "sales", "permission": "Sales", "icon": "fa-cart-shopping"},
+    {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
+)
 
 
 def get_supabase_client():
@@ -153,24 +160,43 @@ def validate_permissions(value):
     return permissions
 
 
-def write_audit_log(admin_client, actor_id, target_user_id, old_values, new_values):
+def write_audit_log(admin_client, actor_id, target_user_id, old_rights, new_rights):
     admin_client.table("audit_log").insert(
         {
-            "actor_id": actor_id,
-            "target_user_id": target_user_id,
-            "event_type": "rights_changed",
-            "old_values": old_values,
-            "new_values": new_values,
+            "table_name": "user_permission",
+            "action": "EDIT",
+            "record_key": str(target_user_id),
+            "old_values": {"rights": sorted(old_rights)},
+            "new_values": {"rights": sorted(new_rights)},
+            "action_by": str(actor_id),
         }
     ).execute()
 
 
 def get_permissions_for_user(client, profile):
-    if profile["role"] == "superadmin":
+    if profile["role"] in {"admin", "superadmin"}:
         return {
             module: {action: True for action in RIGHTS_ACTIONS}
             for module in RIGHTS_MODULES
         }
+    try:
+        normalized = (
+            client.table("user_permission")
+            .select("right_code")
+            .eq("user_id", profile["id"])
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code not in {"PGRST205", "42P01"}:
+            raise
+    else:
+        if normalized is not None and normalized.data:
+            catalog = client.table("right_catalog").select(
+                "right_code, module_code, action"
+            ).execute()
+            return rights_to_permissions(catalog.data, normalized.data)
+
     response = (
         client.table("user_permissions")
         .select("permissions")
@@ -186,6 +212,50 @@ def get_permissions_for_user(client, profile):
     )
 
 
+def rights_to_permissions(catalog, assignments):
+    module_names = {
+        "customers": "Customer",
+        "products": "Product",
+        "hr": "Human Resources",
+        "sales": "Sales",
+        "reports": "Reports",
+    }
+    permissions = empty_permissions()
+    granted = {row["right_code"] for row in assignments}
+    for right in catalog:
+        if right["right_code"] not in granted:
+            continue
+        module = module_names.get(right["module_code"])
+        if module is None:
+            continue
+        action = right["action"]
+        permissions[module][action if action == "view" else {
+            "add": "create",
+            "edit": "edit",
+            "delete": "delete",
+        }[action]] = True
+    return permissions
+
+
+def permissions_to_rights(catalog, permissions):
+    selected = []
+    for right in catalog:
+        module = {
+            "customers": "Customer",
+            "products": "Product",
+            "hr": "Human Resources",
+            "sales": "Sales",
+            "reports": "Reports",
+        }.get(right["module_code"])
+        if module is None:
+            continue
+        action = right["action"]
+        permission_action = "create" if action == "add" else action
+        if permissions[module].get(permission_action) is True:
+            selected.append(right["right_code"])
+    return selected
+
+
 def has_permission(permissions, module, action):
     return (
         module in RIGHTS_MODULES
@@ -198,7 +268,9 @@ def module_cards(permissions):
     return [
         {
             "name": module,
-            "slug": MODULE_SLUGS[module],
+            "slug": next(item["slug"] for item in WORKSPACE_MODULES if item["permission"] == module),
+            "api_slug": MODULE_SLUGS[module],
+            "icon": next(item["icon"] for item in WORKSPACE_MODULES if item["permission"] == module),
             "actions": permissions[module],
         }
         for module in RIGHTS_MODULES
@@ -209,6 +281,7 @@ def module_cards(permissions):
 def must_set_password(user):
     metadata = user.user_metadata or {}
     return metadata.get("must_set_password") is True
+
 
 @app.get("/")
 def index():
@@ -234,6 +307,7 @@ def index():
         "index.html",
         profile=profile,
         module_cards=module_cards(permissions),
+        sidebar_modules=module_cards(permissions),
         permission_error=permission_error,
     )
 
@@ -262,6 +336,50 @@ def api_check_module_permission(module, action):
     return jsonify(allowed=True)
 
 
+@app.get("/customers")
+@app.get("/products")
+@app.get("/human-resources")
+@app.get("/sales")
+@app.get("/reports")
+def module_workspace():
+    client = get_authenticated_client()
+    if client is None:
+        return redirect(url_for("login"))
+    profile = get_current_profile(client)
+    if profile is None:
+        session.clear()
+        return redirect(url_for("login"))
+    if must_set_password(client.auth.get_user().user):
+        return redirect(url_for("set_password"))
+
+    slug = request.path.strip("/")
+    module = next((item for item in WORKSPACE_MODULES if item["slug"] == slug), None)
+    if module is None:
+        return redirect(url_for("index"))
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Module workspace permissions could not be loaded")
+        return render_template(
+            "module_workspace.html",
+            profile=profile,
+            module=module,
+            allowed=False,
+            permission_error=True,
+            sidebar_modules=[],
+        ), 503
+
+    allowed = has_permission(permissions, module["permission"], "view")
+    return render_template(
+        "module_workspace.html",
+        profile=profile,
+        module=module,
+        allowed=allowed,
+        permission_error=False,
+        sidebar_modules=module_cards(permissions),
+    ), 200 if allowed else 403
+
+
 @app.get("/user-management")
 def user_management():
     client, profile = get_management_profile()
@@ -269,10 +387,16 @@ def user_management():
         return redirect(url_for("login"))
     if profile is None:
         return redirect(url_for("index"))
+    try:
+        sidebar_modules = module_cards(get_permissions_for_user(client, profile))
+    except (httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Sidebar permissions could not be loaded")
+        sidebar_modules = []
     return render_template(
         "user_management.html",
         profile=profile,
         is_superadmin=profile["role"] == "superadmin",
+        sidebar_modules=sidebar_modules,
     )
 
 
@@ -288,10 +412,7 @@ def api_users():
         query = get_admin_client().table("profiles").select(
             "id, email, full_name, status, role, created_at"
         )
-        if profile["role"] == "admin":
-            query = query.eq("role", "user")
-        else:
-            query = query.in_("role", ["admin", "user"])
+        query = query.in_("role", ["admin", "user"])
         response = query.order("created_at", desc=True).execute()
     except (RuntimeError, httpx.HTTPError):
         app.logger.exception("User list could not be loaded")
@@ -331,13 +452,16 @@ def api_add_user():
                 "email": email,
                 "password": password,
                 "email_confirm": True,
-                "user_metadata": {"full_name": full_name, "must_set_password": False},
+                "user_metadata": {
+                    "full_name": full_name,
+                    "must_set_password": True,
+                },
             }
         )
         if response.user is None:
             return jsonify(error="User could not be created."), 502
         profile_response = admin_client.table("profiles").update(
-            {"full_name": full_name, "role": "user", "status": "pending"}
+            {"full_name": full_name, "role": "user", "status": "approved"}
         ).eq("id", response.user.id).execute()
         if not profile_response.data:
             admin_client.auth.admin.delete_user(response.user.id)
@@ -535,25 +659,38 @@ def api_get_user_permissions(user_id):
     try:
         if get_rights_target(profile, user_id) is None:
             return jsonify(error="User not found."), 404
-        response = (
-            get_admin_client()
-            .table("user_permissions")
+        admin_client = get_admin_client()
+        catalog_response = admin_client.table("right_catalog").select(
+            "right_code, module_code, resource_code, action"
+        ).execute()
+        assignment_response = (
+            admin_client.table("user_permission")
+            .select("right_code")
+            .eq("user_id", user_id)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (RuntimeError, APIError, httpx.HTTPError):
+        app.logger.exception("User permissions could not be loaded")
+        return jsonify(error="Rights catalogue needs database setup or could not be loaded."), 503
+
+    catalog = catalog_response.data or []
+    selected = [row["right_code"] for row in assignment_response.data or []]
+    if not selected:
+        legacy = (
+            admin_client.table("user_permissions")
             .select("permissions")
             .eq("user_id", user_id)
             .maybe_single()
             .execute()
         )
-    except (RuntimeError, httpx.HTTPError):
-        app.logger.exception("User permissions could not be loaded")
-        return jsonify(error="User permissions could not be loaded. Please try again."), 502
-
-    response_data = response.data if response is not None else None
-    permissions = (
-        validate_permissions(response_data["permissions"])
-        if response_data
-        else None
-    )
-    return jsonify(permissions=permissions or empty_permissions())
+        legacy_data = legacy.data if legacy is not None else None
+        legacy_permissions = (
+            validate_permissions(legacy_data["permissions"]) if legacy_data else None
+        )
+        if legacy_permissions:
+            selected = permissions_to_rights(catalog, legacy_permissions)
+    return jsonify(catalog=catalog, selected=selected)
 
 
 @app.patch("/api/users/<user_id>/permissions")
@@ -565,45 +702,55 @@ def api_update_user_permissions(user_id):
         return jsonify(error="Administrator access is required."), 403
 
     payload = get_user_payload()
-    permissions = validate_permissions(payload.get("permissions") if payload else None)
-    if permissions is None:
-        return jsonify(error="Invalid permissions payload."), 400
+    selected = payload.get("rights") if payload else None
+    if not isinstance(selected, list) or not all(
+        isinstance(right, str) for right in selected
+    ) or len(selected) != len(set(selected)):
+        return jsonify(error="Invalid rights payload."), 400
 
     try:
         target = get_rights_target(profile, user_id)
         if target is None:
             return jsonify(error="User not found."), 404
         admin_client = get_admin_client()
-        current = (
-            admin_client.table("user_permissions")
-            .select("permissions")
-            .eq("user_id", user_id)
-            .maybe_single()
-            .execute()
+        catalog_response = admin_client.table("right_catalog").select(
+            "right_code, module_code, resource_code, action"
+        ).execute()
+        catalog = catalog_response.data or []
+        known_rights = {right["right_code"] for right in catalog}
+        if not set(selected).issubset(known_rights):
+            return jsonify(error="Rights include entries not in the database catalogue."), 400
+        current = admin_client.table("user_permission").select(
+            "right_code, is_deleted"
+        ).eq("user_id", user_id).execute()
+        active_rights = {
+            row["right_code"] for row in current.data or [] if not row["is_deleted"]
+        }
+        to_soft_delete = active_rights.difference(selected)
+        if to_soft_delete:
+            admin_client.table("user_permission").update(
+                {"is_deleted": True}
+            ).eq("user_id", user_id).in_("right_code", list(to_soft_delete)).execute()
+        if selected:
+            admin_client.table("user_permission").upsert(
+                [
+                    {"user_id": user_id, "right_code": right_code, "is_deleted": False}
+                    for right_code in selected
+                ]
+            ).execute()
+        # Keep the original JSON contract synchronized for deployments that still read it.
+        permissions = rights_to_permissions(
+            catalog, [{"right_code": right_code} for right_code in selected]
         )
-        current_data = current.data if current is not None else None
-        old_permissions = (
-            validate_permissions(current_data["permissions"])
-            if current_data
-            else empty_permissions()
-        )
-        if old_permissions == permissions:
-            return jsonify(message="Permissions unchanged.", permissions=permissions)
         admin_client.table("user_permissions").upsert(
             {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
         ).execute()
-        write_audit_log(
-            admin_client,
-            profile["id"],
-            user_id,
-            {"permissions": old_permissions},
-            {"permissions": deepcopy(permissions)},
-        )
-    except (RuntimeError, httpx.HTTPError):
+        write_audit_log(admin_client, profile["id"], user_id, active_rights, selected)
+    except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User permissions update failed")
-        return jsonify(error="User permissions could not be updated. Please try again."), 502
+        return jsonify(error="Rights need database setup or could not be updated."), 503
 
-    return jsonify(message="Permissions updated.", permissions=permissions)
+    return jsonify(message="Rights updated.", rights=selected)
 
 
 @app.get("/login")

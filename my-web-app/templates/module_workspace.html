@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% set page_title = module.name %}
+{% block title %}{{ module.name }} | PentadERP{% endblock %}
+
+{% block content %}
+  <section class="dashboard-intro">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> WORKSPACE MODULE</span>
+      <h2>{{ module.name }}</h2>
+      {% if not allowed %}
+        <p class="empty-state">
+          {% if permission_error %}
+            Module access is unavailable until permissions are configured. Please contact an administrator.
+          {% else %}
+            You do not have View access to this module.
+          {% endif %}
+        </p>
+      {% else %}
+        <p class="empty-state">Coming soon. This module is not available yet.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endblock %}
