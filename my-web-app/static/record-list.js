@@ -92,6 +92,14 @@ function renderRecords(records) {
     actionCell.dataset.label = "Actions";
     const actions = document.createElement("div");
     actions.className = "table-actions";
+    if (config.module === "products") {
+      const priceHistoryButton = document.createElement("a");
+      priceHistoryButton.className = "btn btn-secondary";
+      priceHistoryButton.textContent = "Price history";
+      priceHistoryButton.href =
+        `/products/${encodeURIComponent(record[config.keyField])}/price-history`;
+      actions.appendChild(priceHistoryButton);
+    }
     if (record.isDeleted) {
       if (config.isAdmin && currentActions.delete) {
         addActionButton(actions, "Restore", () => restoreRecord(record));

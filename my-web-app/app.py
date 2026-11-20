@@ -3,6 +3,8 @@
 import os
 import secrets
 import smtplib
+from datetime import date
+from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from collections.abc import Mapping
 
@@ -319,6 +321,8 @@ def rights_to_permissions(catalog, assignments):
     for right in catalog:
         if right["right_code"] not in granted:
             continue
+        if right.get("resource_code") == "price_history":
+            continue
         module = module_names.get(right["module_code"])
         if module is None:
             continue
@@ -334,6 +338,8 @@ def rights_to_permissions(catalog, assignments):
 def permissions_to_rights(catalog, permissions):
     selected = []
     for right in catalog:
+        if right.get("resource_code") == "price_history":
+            continue
         module = {
             "customers": "Customer",
             "products": "Product",
@@ -570,6 +576,350 @@ def record_form_values(config, payload, editing=False):
             return None, f"Choose valid {field['label'].lower()}."
         values[field["column"]] = value or None
     return values, None
+
+
+PRICE_HISTORY_RIGHTS = {
+    "create": "products.priceHistory.add",
+    "edit": "products.priceHistory.edit",
+    "delete": "products.priceHistory.delete",
+}
+
+
+def get_price_history_access(product_code, action):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, (
+            jsonify(error="You must be logged in."),
+            401,
+        )
+    profile = get_current_profile(client)
+    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
+        return None, None, None, (
+            jsonify(error="This account is not active."),
+            403,
+        )
+
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    rights = set()
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        if not is_admin and not permissions["Product"]["view"]:
+            return None, None, None, (
+                jsonify(error="Product view access is required."),
+                403,
+            )
+        if not is_admin:
+            response = (
+                client.table("user_permission")
+                .select("right_code")
+                .eq("user_id", profile["id"])
+                .eq("is_deleted", False)
+                .in_("right_code", list(PRICE_HISTORY_RIGHTS.values()))
+                .execute()
+            )
+            rights = {row["right_code"] for row in response.data or []}
+    except (APIError, httpx.HTTPError):
+        app.logger.exception("Price history permissions could not be loaded")
+        return None, None, None, (
+            jsonify(error="Price History rights need database setup or could not be checked."),
+            503,
+        )
+
+    if not is_admin and action in PRICE_HISTORY_RIGHTS:
+        if PRICE_HISTORY_RIGHTS[action] not in rights:
+            return None, None, None, (
+                jsonify(error=f"Price History {action} permission is required."),
+                403,
+            )
+
+    try:
+        product = (
+            client.table("product")
+            .select("prodcode, description, unit, is_deleted")
+            .eq("prodcode", product_code)
+            .maybe_single()
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return None, None, None, record_error_response(
+            error, {"name": "Price History"}
+        )
+    if product.data is None:
+        return None, None, None, (
+            jsonify(error="Product not found."),
+            404,
+        )
+    if action in {"create", "edit", "delete"} and product.data.get("is_deleted"):
+        return None, None, None, (
+            jsonify(error="Restore this product before changing its price history."),
+            409,
+        )
+    return client, profile, {"product": product.data, "rights": rights}, None
+
+
+def price_history_form_values(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {"effDate", "unitPrice"}:
+        return None, "Enter an effective date and unit price."
+    effective_date = payload.get("effDate")
+    if not isinstance(effective_date, str):
+        return None, "Enter a valid effective date."
+    try:
+        parsed_date = date.fromisoformat(effective_date)
+    except ValueError:
+        return None, "Enter a valid effective date."
+    if parsed_date.isoformat() != effective_date:
+        return None, "Enter a valid effective date."
+
+    raw_price = payload.get("unitPrice")
+    if not isinstance(raw_price, str):
+        return None, "Enter a valid unit price."
+    try:
+        unit_price = Decimal(raw_price)
+    except InvalidOperation:
+        return None, "Enter a valid unit price."
+    if (
+        not unit_price.is_finite()
+        or unit_price <= 0
+        or unit_price.as_tuple().exponent < -2
+        or unit_price > Decimal("99999999.99")
+    ):
+        return None, "Unit price must be greater than zero and have at most 2 decimal places."
+    return {
+        "effdate": parsed_date.isoformat(),
+        "unitprice": format(unit_price.quantize(Decimal("0.01")), "f"),
+    }, None
+
+
+def is_price_history_date(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        return date.fromisoformat(value).isoformat() == value
+    except ValueError:
+        return False
+
+
+def price_history_response_record(row, is_admin):
+    record = {
+        "prodCode": row.get("prodcode"),
+        "effDate": row.get("effdate"),
+        "unitPrice": row.get("unitprice"),
+    }
+    if is_admin:
+        record.update(
+            isDeleted=row.get("is_deleted") is True,
+            stamp=row.get("stamp"),
+        )
+    return record
+
+
+@app.get("/products/<product_code>/price-history")
+def product_price_history(product_code):
+    client, profile, context, error = get_price_history_access(product_code, "view")
+    if error:
+        if error[1] == 401:
+            return redirect(url_for("login"))
+        if error[1] == 403:
+            return redirect(url_for("index"))
+        return error
+
+    permissions = get_permissions_for_user(client, profile)
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    actions = {
+        action: is_admin or PRICE_HISTORY_RIGHTS[action] in context["rights"]
+        for action in PRICE_HISTORY_RIGHTS
+    }
+    return render_template(
+        "price_history.html",
+        profile=profile,
+        product=context["product"],
+        is_admin=is_admin,
+        actions=actions,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/api/products/<product_code>/price-history")
+def api_list_price_history(product_code):
+    client, profile, context, error = get_price_history_access(product_code, "view")
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    columns = "prodcode, effdate, unitprice"
+    admin_columns = f"{columns}, is_deleted, stamp"
+    try:
+        active = (
+            client.table("pricehist_active")
+            .select(admin_columns if is_admin else columns)
+            .eq("prodcode", product_code)
+            .order("effdate", desc=True)
+            .execute()
+        )
+        active_rows = active.data or []
+        inactive_rows = []
+        if is_admin:
+            inactive = (
+                client.table("pricehist")
+                .select(admin_columns)
+                .eq("prodcode", product_code)
+                .eq("is_deleted", True)
+                .order("effdate", desc=True)
+                .execute()
+            )
+            inactive_rows = inactive.data or []
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Price History"})
+
+    search = request.args.get("search", "").strip().casefold()
+    rows = active_rows + inactive_rows if status_filter == "all" else (
+        inactive_rows if status_filter == "inactive" else active_rows
+    )
+    if search:
+        rows = [
+            row for row in rows
+            if search in str(row.get("effdate") or "").casefold()
+            or search in str(row.get("unitprice") or "").casefold()
+        ]
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    actions = {
+        action: is_admin or PRICE_HISTORY_RIGHTS[action] in context["rights"]
+        for action in PRICE_HISTORY_RIGHTS
+    }
+    return jsonify(
+        product=context["product"],
+        records=[price_history_response_record(row, is_admin) for row in rows],
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions=actions,
+    )
+
+
+@app.post("/api/products/<product_code>/price-history")
+def api_create_price_history(product_code):
+    client, profile, _context, error = get_price_history_access(product_code, "create")
+    if error:
+        return error
+    values, validation_error = price_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    values["prodcode"] = product_code
+    try:
+        response = client.table("pricehist").insert(values).execute()
+    except APIError as error:
+        if error.code == "23505":
+            return jsonify(error="A price already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Price History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Price History"})
+    return jsonify(
+        message="Price added.",
+        record=price_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        )
+        if response.data else None,
+    ), 201
+
+
+@app.patch("/api/products/<product_code>/price-history/<effective_date>")
+def api_edit_price_history(product_code, effective_date):
+    client, profile, _context, error = get_price_history_access(product_code, "edit")
+    if error:
+        return error
+    if not is_price_history_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    values, validation_error = price_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        current = (
+            client.table("pricehist")
+            .select("is_deleted")
+            .eq("prodcode", product_code)
+            .eq("effdate", effective_date)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Price history entry not found."), 404
+        if current.data.get("is_deleted"):
+            return jsonify(error="Restore this price history entry before editing."), 409
+        response = (
+            client.table("pricehist")
+            .update(values)
+            .eq("prodcode", product_code)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code == "23505":
+            return jsonify(error="A price already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Price History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Price History"})
+    return jsonify(
+        message="Price updated.",
+        record=price_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        )
+        if response.data else None,
+    )
+
+
+@app.patch("/api/products/<product_code>/price-history/<effective_date>/delete")
+def api_delete_price_history(product_code, effective_date):
+    client, _profile, _context, error = get_price_history_access(product_code, "delete")
+    if error:
+        return error
+    if not is_price_history_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    try:
+        response = (
+            client.table("pricehist")
+            .update({"is_deleted": True})
+            .eq("prodcode", product_code)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Price History"})
+    if not response.data:
+        return jsonify(error="Price history entry not found or already inactive."), 404
+    return jsonify(message="Price history entry moved to Inactive.")
+
+
+@app.patch("/api/products/<product_code>/price-history/<effective_date>/restore")
+def api_restore_price_history(product_code, effective_date):
+    client, profile, _context, error = get_price_history_access(product_code, "delete")
+    if error:
+        return error
+    if not is_price_history_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive price history."), 403
+    try:
+        response = (
+            client.table("pricehist")
+            .update({"is_deleted": False})
+            .eq("prodcode", product_code)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", True)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Price History"})
+    if not response.data:
+        return jsonify(error="Inactive price history entry not found."), 404
+    return jsonify(message="Price history entry restored.")
 
 
 @app.get("/api/records/<module_slug>")

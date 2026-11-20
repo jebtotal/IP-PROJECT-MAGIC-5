@@ -6,7 +6,7 @@
     window.isSuperadmin = {{ "true" if is_superadmin else "false" }};
     window.isAdmin = {{ "true" if profile.role == "admin" else "false" }};
   </script>
-  <script src="{{ url_for('static', filename='user-management.js', v='2') }}" defer></script>
+  <script src="{{ url_for('static', filename='user-management.js', v='3') }}" defer></script>
 {% endblock %}
 
 {% block content %}
