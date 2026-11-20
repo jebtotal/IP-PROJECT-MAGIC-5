@@ -4,7 +4,7 @@
 {% block head_scripts %}
   <script>
     window.recordListConfig = {
-      module: "customers",
+      module: {{ record_config.module_slug|tojson }},
       title: {{ record_config.name|tojson }},
       singular: {{ record_config.singular|tojson }},
       keyField: {{ record_config.key_field|tojson }},
@@ -13,7 +13,7 @@
       isAdmin: {{ "true" if is_admin else "false" }}
     };
   </script>
-  <script src="{{ url_for('static', filename='record-list.js', v='1') }}" defer></script>
+  <script src="{{ url_for('static', filename='record-list.js', v='2') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -38,7 +38,7 @@
     </div>
 
     {% if is_admin %}
-      <div id="record-tabs" class="record-tabs" role="tablist" aria-label="Customer status filter">
+      <div id="record-tabs" class="record-tabs" role="tablist" aria-label="{{ record_config.singular }} status filter">
         <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
         <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
         <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
@@ -47,7 +47,7 @@
 
     <p id="records-message" class="table-message" role="status" aria-live="polite"></p>
     <div class="table-wrap">
-      <table id="record-table" class="management-table record-table">
+      <table id="record-table" class="management-table record-table" data-record-module="{{ record_config.module_slug }}">
         <thead id="record-head"></thead>
         <tbody id="record-body"></tbody>
       </table>
@@ -60,7 +60,7 @@
       <div class="dialog-heading">
         <div>
           <span class="eyebrow">{{ module.name|upper }} DETAILS</span>
-          <h2 id="record-dialog-title" class="dialog-title">Add customer</h2>
+          <h2 id="record-dialog-title" class="dialog-title">Add {{ record_config.singular|lower }}</h2>
         </div>
         <button type="button" class="icon-button" data-dialog-close="record-dialog" aria-label="Close dialog">
           <i class="fa-solid fa-xmark" aria-hidden="true"></i>
