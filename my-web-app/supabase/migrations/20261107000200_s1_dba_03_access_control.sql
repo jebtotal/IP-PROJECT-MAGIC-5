@@ -1,11 +1,14 @@
 -- S1-DBA-03: normalized roles and rights linked to the existing Supabase profiles.
 -- The app's JSON user_permissions table and Supabase Auth credentials are untouched.
+-- This phase creates the normalized schema/catalogue only: it does not backfill
+-- user_permission or change hope_can_access / existing HOPE access policies.
 BEGIN;
 SET LOCAL search_path = public, pg_temp;
 
 DO $$
 DECLARE
     unknown_roles TEXT;
+    duplicate_email_groups BIGINT;
     has_role_id BOOLEAN;
     has_blocked BOOLEAN;
     has_status BOOLEAN;
@@ -39,6 +42,22 @@ BEGIN
     ) THEN
         RAISE EXCEPTION
             'S1-DBA-03 stopped: public.profiles must retain UUID id, text email, and text role columns.';
+    END IF;
+
+    SELECT count(*)
+      INTO duplicate_email_groups
+      FROM (
+          SELECT lower(email)
+            FROM public.profiles
+           WHERE email IS NOT NULL
+           GROUP BY lower(email)
+          HAVING count(*) > 1
+      ) AS duplicate_emails;
+
+    IF duplicate_email_groups > 0 THEN
+        RAISE EXCEPTION
+            'S1-DBA-03 stopped: public.profiles contains % case-insensitive duplicate email group(s); resolve them before applying.',
+            duplicate_email_groups;
     END IF;
 
     SELECT string_agg(DISTINCT role::TEXT, ', ' ORDER BY role::TEXT)
@@ -337,6 +356,53 @@ CREATE TABLE IF NOT EXISTS public.user_permission (
     CONSTRAINT user_permission_pkey PRIMARY KEY (user_id, right_code)
 );
 
+CREATE OR REPLACE FUNCTION public.trg_user_permission_stamp_s1_dba_03()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public, auth
+AS $$
+DECLARE
+    v_action TEXT;
+    v_actor TEXT;
+BEGIN
+    v_actor := left(
+        COALESCE(auth.jwt() ->> 'email', auth.uid()::TEXT, 'system'),
+        24
+    );
+
+    IF TG_OP = 'INSERT' THEN
+        v_action := 'ADD';
+    ELSIF (to_jsonb(OLD) - 'stamp') = (to_jsonb(NEW) - 'stamp') THEN
+        NEW.stamp := OLD.stamp;
+        RETURN NEW;
+    ELSIF OLD.is_deleted IS DISTINCT FROM NEW.is_deleted THEN
+        v_action := CASE WHEN NEW.is_deleted THEN 'DELETE' ELSE 'RESTORE' END;
+    ELSE
+        v_action := 'EDIT';
+    END IF;
+
+    NEW.stamp := left(
+        v_action || ' ' || v_actor || ' ' ||
+        to_char(now() AT TIME ZONE 'Asia/Manila', 'YYYY-MM-DD HH12:MI AM'),
+        60
+    );
+    RETURN NEW;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.trg_user_permission_block_truncate_s1_dba_03()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    RAISE EXCEPTION
+        'Hard truncate not allowed on %. Use UPDATE ... SET is_deleted = true.',
+        TG_TABLE_NAME;
+    RETURN NULL;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.trg_user_permission_delete_guard_s1_dba_03()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -420,11 +486,11 @@ BEGIN
     FOR trigger_name, trigger_sql IN
         SELECT * FROM (VALUES
             ('user_permission_biu_stamp',
-             'CREATE TRIGGER %I BEFORE INSERT OR UPDATE ON public.user_permission FOR EACH ROW EXECUTE FUNCTION public.trg_set_stamp()'),
+             'CREATE TRIGGER %I BEFORE INSERT OR UPDATE ON public.user_permission FOR EACH ROW EXECUTE FUNCTION public.trg_user_permission_stamp_s1_dba_03()'),
             ('user_permission_bd_block',
              'CREATE TRIGGER %I BEFORE DELETE ON public.user_permission FOR EACH ROW EXECUTE FUNCTION public.trg_user_permission_delete_guard_s1_dba_03()'),
             ('user_permission_bt_block',
-             'CREATE TRIGGER %I BEFORE TRUNCATE ON public.user_permission FOR EACH STATEMENT EXECUTE FUNCTION public.trg_block_hard_delete()')
+             'CREATE TRIGGER %I BEFORE TRUNCATE ON public.user_permission FOR EACH STATEMENT EXECUTE FUNCTION public.trg_user_permission_block_truncate_s1_dba_03()')
         ) AS trigger_def(name, command)
     LOOP
         IF NOT EXISTS (

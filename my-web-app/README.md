@@ -73,10 +73,23 @@ The HOPE schema is split into timestamp-ordered migrations:
   rights, and soft-deletable `user_permission` tables. It preserves Supabase
   Auth credentials and the app's existing JSON `user_permissions` contract;
   the legacy `profiles.role` and new role reference stay synchronized.
-  It adds a case-insensitive unique email index and backfills the new blocked
-  flag from existing blocked/rejected statuses only when the column is first
-  added. The catalogue includes the 30 rights documented in the checked-in
-  design notes; six rights unspecified by the sprint plan remain deferred.
+  It preflights case-insensitive duplicate profile emails before creating a
+  unique email index, and backfills the new blocked flag from existing
+  blocked/rejected statuses only when the column is first added. It defines
+  dedicated stamp and truncate-guard trigger functions for `user_permission`,
+  so it does not depend on the source HOPE audit helper functions. Its
+  `user_permission` RLS policy allows authenticated users to read their own
+  assignments; writes are performed by the trusted server-side service-role
+  client. This is a schema/catalogue phase: it does not copy legacy
+  `user_permissions.permissions` values into `user_permission` or replace
+  existing `hope_can_access` logic or HOPE RLS policies. The catalogue uses
+  `add` as the normalized create-action code; the later
+  `20261109000000_hope_app_access.sql` helper maps application `create` checks
+  to that code while retaining the legacy JSON fallback. A separate, reviewed
+  cutover is required to backfill existing assignments and make normalized
+  rights authoritative. The catalogue includes the 30 rights documented in
+  the checked-in design notes; six rights unspecified by the sprint plan
+  remain deferred.
 - `20261107000300_s1_dba_04_password_reset_token.sql` adds a private
   `password_reset_token` table referencing `profiles(id)`, with a unique
   lowercase SHA-256 token hash, `reset`/`set_password` purpose, expiry, and
@@ -106,8 +119,10 @@ The HOPE schema is split into timestamp-ordered migrations:
   active-row views, audit triggers compatible with the existing application
   `audit_log`, and row-level access policies. Approved users need the matching
   module/action permission; administrators have access to all HOPE records.
-  It also prevents users from changing their own profile role through the
-  public API.
+  Its `hope_can_access` helper reads normalized rights when present, maps
+  application `create` checks to catalogue action `add`, and otherwise falls
+  back to legacy JSON permissions. It also prevents users from changing their
+  own profile role through the public API.
   Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
   migrations to test add/edit/soft-delete attribution and the fallback; it
   rolls back test rows.
@@ -115,7 +130,11 @@ The HOPE schema is split into timestamp-ordered migrations:
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
 `20261108000100_hope_operational_tables_preserve_audit.sql` followed by the
-sample-data migration, then `20261109000000_hope_app_access.sql`. Do not run
+sample-data migration. To use normalized rights for those tables, apply
+`20261107000200_s1_dba_03_access_control.sql` and
+`20261107000400_s1_dba_05_catalogue_seed.sql` before
+`20261109000000_hope_app_access.sql`; that last migration installs/replaces
+the app's named HOPE policies. Do not run
 the base-table migration or the source HOPE audit-support migration until
 they have been adapted for that audit schema. Otherwise, apply the migrations
 in filename order. The base migration does not touch the `profiles` table or
@@ -168,12 +187,16 @@ through the application.
 
 Administrators can assign View, Create, Edit, and Delete rights for Customer,
 Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
-Product, Human Resources, Sales, and Reports from the Rights dialog. Admins and
-superadmins have implicit full access to all five modules. User rights are read
-from the active `user_permission` assignments and the `right_catalog`, with the
-legacy JSON `user_permissions` record kept synchronized for compatibility.
-Rights changes are recorded in `audit_log`; verify the deployed tables and
-policies if the app reports that rights need database setup.
+are stored in the normalized `user_permission` assignments and the
+`right_catalog`, with the legacy JSON `user_permissions` record kept
+synchronized for compatibility. Admins and superadmins have implicit full
+access to all five modules. Apply
+`20261107000200_s1_dba_03_access_control.sql` followed by
+`20261107000400_s1_dba_05_catalogue_seed.sql` after confirming the target
+project's profile schema; the app also requires compatible
+`user_permissions` and `audit_log` tables. Rights changes are recorded in
+`audit_log`; verify the deployed tables and policies if the app reports that
+rights need database setup.
 
 The checked-in catalogue currently has 30 rights. It does not yet include
 Product Price Add/Edit/Delete; Job History Add/Edit/Delete; or the Reports
