@@ -204,13 +204,15 @@ rights Top Products, Active Employees, All Employees, Employee Job History,
 and Top Sales. These require a DB Admin catalogue update; the app does not edit
 the database schema or seed data.
 
-Customers are available at `/customers`. The shared record list reads
-`customer_active` for active rows and uses the existing `is_deleted`, `stamp`,
-and audit triggers for administrator status, restore, and record history.
+Customers and Products are available at `/customers` and `/products`. Their
+shared record list provides search, administrator active/inactive/all filters,
+permission-checked create/edit/soft-delete operations, and administrator-only
+restore. The Customer form maps to `custno`, `custname`, `address`, and
+`payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
 If the active view, table access, or policies are unavailable, the UI reports
-that database setup is needed. Products, Human Resources, Sales, and Reports
-currently show a Coming soon page.
+that database setup is needed. Human Resources, Sales, and Reports currently
+show a Coming soon page.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

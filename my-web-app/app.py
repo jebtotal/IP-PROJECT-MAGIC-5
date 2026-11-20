@@ -66,6 +66,7 @@ WORKSPACE_MODULES = (
 )
 RECORD_MODULES = {
     "customers": {
+        "module_slug": "customers",
         "name": "Customers",
         "singular": "Customer",
         "permission": "Customer",
@@ -103,6 +104,41 @@ RECORD_MODULES = {
                 "maxlength": 3,
                 "required": True,
                 "options": ("COD", "30D", "45D"),
+            },
+        ),
+    },
+    "products": {
+        "module_slug": "products",
+        "name": "Products",
+        "singular": "Product",
+        "permission": "Product",
+        "table": "product",
+        "active_view": "product_active",
+        "key": "prodcode",
+        "key_field": "prodCode",
+        "display_field": "description",
+        "fields": (
+            {
+                "name": "prodCode",
+                "column": "prodcode",
+                "label": "Product Code",
+                "maxlength": 6,
+                "required": True,
+            },
+            {
+                "name": "description",
+                "column": "description",
+                "label": "Description",
+                "maxlength": 30,
+                "required": False,
+            },
+            {
+                "name": "unit",
+                "column": "unit",
+                "label": "Unit",
+                "maxlength": 3,
+                "required": False,
+                "options": ("pc", "ea", "mtr", "pkg", "ltr"),
             },
         ),
     },
@@ -431,8 +467,8 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
-    if allowed and slug == "customers":
-        record_config = RECORD_MODULES["customers"]
+    if allowed and slug in RECORD_MODULES:
+        record_config = RECORD_MODULES[slug]
         return render_template(
             "record_list.html",
             profile=profile,
