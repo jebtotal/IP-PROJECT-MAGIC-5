@@ -198,17 +198,24 @@ project's profile schema; the app also requires compatible
 `audit_log`; verify the deployed tables and policies if the app reports that
 rights need database setup.
 
-The checked-in catalogue currently has 30 rights. It does not yet include
-Product Price Add/Edit/Delete; Job History Add/Edit/Delete; or the Reports
-rights Top Products, Active Employees, All Employees, Employee Job History,
-and Top Sales. These require a DB Admin catalogue update; the app does not edit
-the database schema or seed data.
+The base access-control and catalogue-seed migrations define 30 rights; the
+separate price-history migration adds its three mutation rights. Job History
+Add/Edit/Delete and the Reports rights Top Products, Active Employees, All
+Employees, Employee Job History, and Top Sales remain deferred; these require
+a future DB Admin catalogue update.
 
 Customers and Products are available at `/customers` and `/products`. Their
 shared record list provides search, administrator active/inactive/all filters,
 permission-checked create/edit/soft-delete operations, and administrator-only
 restore. The Customer form maps to `custno`, `custname`, `address`, and
 `payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
+Product rows link to Price History, which supports dated price creation,
+editing (including the effective date), soft deletion, and administrator
+restore. Product View controls access to the history; the separate Price
+History Add/Edit/Delete rights control mutations. Apply
+`20261110000000_s1_dba_07_price_history_rights.sql` after the access-control
+and HOPE app-access migrations, then assign the new rights through User
+Management. No rights are automatically assigned by that migration.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
 If the active view, table access, or policies are unavailable, the UI reports
 that database setup is needed. Human Resources, Sales, and Reports currently

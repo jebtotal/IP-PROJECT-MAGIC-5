@@ -29,6 +29,7 @@ const rightResourceLabels = {
   sale_details: "Sale Detail",
   top_customers: "Top Customers",
   products_master: "Product Master List",
+  price_history: "Price History",
 };
 let rightsTarget = null;
 let editUserTarget = null;
