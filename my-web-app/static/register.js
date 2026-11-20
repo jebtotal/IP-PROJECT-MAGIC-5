@@ -16,6 +16,12 @@ form.addEventListener("submit", async (event) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(
+        `Registration failed with a server error (HTTP ${response.status}).`
+      );
+    }
     const result = await response.json();
 
     if (!response.ok) {

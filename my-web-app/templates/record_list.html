@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% set page_title = record_config.name %}
+{% block title %}{{ record_config.name }} | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.recordListConfig = {
+      module: "customers",
+      title: {{ record_config.name|tojson }},
+      singular: {{ record_config.singular|tojson }},
+      keyField: {{ record_config.key_field|tojson }},
+      displayField: {{ record_config.display_field|tojson }},
+      fields: {{ record_config.fields|tojson }},
+      isAdmin: {{ "true" if is_admin else "false" }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='record-list.js', v='1') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> {{ module.name|upper }} MODULE</span>
+      <h2>{{ record_config.name }}</h2>
+      <p>Search and manage {{ record_config.name|lower }} records.</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel record-panel" aria-label="{{ record_config.name }} records">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search {{ record_config.name|lower }}</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="record-search" type="search" placeholder="Search {{ record_config.name|lower }}..." autocomplete="off">
+      </label>
+      <button id="record-add" type="button" class="btn btn-primary" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
+      </button>
+    </div>
+
+    {% if is_admin %}
+      <div id="record-tabs" class="record-tabs" role="tablist" aria-label="Customer status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
+    {% endif %}
+
+    <p id="records-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table id="record-table" class="management-table record-table">
+        <thead id="record-head"></thead>
+        <tbody id="record-body"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="auth-footer"><a href="{{ url_for('index') }}">Back to workspace</a></p>
+
+  <dialog id="record-dialog" class="app-dialog" aria-labelledby="record-dialog-title">
+    <form id="record-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">{{ module.name|upper }} DETAILS</span>
+          <h2 id="record-dialog-title" class="dialog-title">Add customer</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="record-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div id="record-fields" class="form-grid"></div>
+      <p id="record-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="record-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="record-save" class="btn btn-primary">Save {{ record_config.singular|lower }}</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}
