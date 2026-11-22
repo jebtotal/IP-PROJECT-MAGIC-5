@@ -11,7 +11,7 @@ from collections.abc import Mapping
 
 import httpx
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from postgrest.exceptions import APIError
 from supabase import create_client
@@ -823,6 +823,119 @@ def employee_job_history(employee_no):
         departments=departments,
         is_admin=is_admin,
         actions=actions,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/human-resources/employees/<employee_no>")
+def employee_profile(employee_no):
+    client, profile, _config, _actions, error = get_record_access(
+        "employees", "view"
+    )
+    if error:
+        if error[1] == 401:
+            return redirect(url_for("login"))
+        if error[1] == 403:
+            return redirect(url_for("index"))
+        return error
+
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    employee_columns = (
+        "empno, lastname, firstname, gender, birthdate, hiredate, sepdate, is_deleted, stamp"
+        if is_admin
+        else "empno, lastname, firstname, gender, birthdate, hiredate, sepdate"
+    )
+    try:
+        employee = (
+            client.table("employee" if is_admin else "employee_active")
+            .select(employee_columns)
+            .eq("empno", employee_no)
+            .maybe_single()
+            .execute()
+            .data
+        )
+        if employee is None:
+            abort(404)
+
+        history_rights = get_job_history_rights(client, profile)
+        history = []
+        can_view_history = JOB_HISTORY_RIGHTS["view"] in history_rights
+        if can_view_history and not employee.get("is_deleted"):
+            history = (
+                client.table("jobhistory_active")
+                .select("jobcode, deptcode, effdate, salary")
+                .eq("empno", employee_no)
+                .order("effdate", desc=True)
+                .execute()
+                .data or []
+            )
+            jobs = (
+                client.table("job_active")
+                .select("jobcode, jobdesc")
+                .execute()
+                .data or []
+            )
+            departments = (
+                client.table("department_active")
+                .select("deptcode, deptname")
+                .execute()
+                .data or []
+            )
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Employee profile could not be loaded")
+        return jsonify(error="Employee profile data needs database setup or could not be loaded."), 503
+
+    today = datetime.now(MANILA_TIMEZONE).date()
+    current_history = None
+    for row in history:
+        try:
+            effective_date = date.fromisoformat(str(row.get("effdate"))[:10])
+        except ValueError:
+            continue
+        if effective_date <= today:
+            current_history = row
+            break
+    job_labels = {
+        row["jobcode"]: row.get("jobdesc")
+        for row in jobs
+    } if can_view_history and not employee.get("is_deleted") else {}
+    department_labels = {
+        row["deptcode"]: row.get("deptname")
+        for row in departments
+    } if can_view_history and not employee.get("is_deleted") else {}
+    timeline = []
+    for row in history:
+        try:
+            effective_date = date.fromisoformat(str(row.get("effdate"))[:10])
+        except ValueError:
+            continue
+        timeline.append({
+            "effDate": row.get("effdate"),
+            "jobCode": row.get("jobcode"),
+            "jobTitle": job_labels.get(row.get("jobcode")),
+            "deptCode": row.get("deptcode"),
+            "departmentName": department_labels.get(row.get("deptcode")),
+            "salary": row.get("salary"),
+            "status": (
+                "Upcoming" if effective_date > today
+                else "Current" if row is current_history and employee_is_current(employee.get("sepdate"))
+                else "Previous"
+            ),
+        })
+
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Employee profile permissions could not be loaded")
+        return jsonify(error="Employee profile permissions could not be checked."), 503
+    return render_template(
+        "employee_profile.html",
+        profile=profile,
+        employee=employee,
+        timeline=timeline,
+        can_view_history=can_view_history,
+        is_current=employee_is_current(employee.get("sepdate")),
+        is_admin=is_admin,
         sidebar_modules=module_cards(permissions),
     )
 
@@ -1789,6 +1902,7 @@ def api_list_records(module_slug):
         response_actions["jobHistoryView"] = (
             JOB_HISTORY_RIGHTS["view"] in history_rights
         )
+        response_actions["profileView"] = True
     return jsonify(
         records=records,
         counts=counts if is_admin else None,

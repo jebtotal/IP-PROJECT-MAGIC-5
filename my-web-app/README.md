@@ -504,6 +504,8 @@ Employee separation dates remain editable. Employee deletion uses the
 employee Delete right and is soft-delete only; linked profiles must first be
 unlinked, and active Job History/Sales records prevent deletion. Only
 administrators can restore inactive Employees.
+Employee profiles are available from the employee list and show personal
+details with a chronological Job Timeline when the user has Job History View.
 Employees with Job History View access have a per-employee Job History page
 for effective-dated job/department promotions or transfers and salary. Job
 History Add/Edit/Delete rights control those operations, which soft-delete
