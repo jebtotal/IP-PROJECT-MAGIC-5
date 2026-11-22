@@ -32,6 +32,7 @@ Use the live team board to confirm which risks still apply, assign accountable o
 
 ## Related records
 
+- [Sprint 4 planning notes and board](SPRINT_4_PLANNING_NOTES_AND_BOARD.md)
 - [Sprint 3 planning notes and board](SPRINT_3_PLANNING_NOTES_AND_BOARD.md)
 - [Sprint 3 mid-sprint check and impediment log](MID_SPRINT_3_CHECK_AND_IMPEDIMENT_LOG.md)
 - [Sprint 3 carryover prioritization](SPRINT_3_CARRYOVER_PRIORITIZATION.md)
