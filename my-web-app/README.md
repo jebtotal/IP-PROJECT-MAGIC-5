@@ -337,6 +337,9 @@ The HOPE schema is split into timestamp-ordered migrations:
   only on a scratch database. See
   [the S2-DBA-06 benchmark notes](docs/s2-dba-06-search-index-tuning.md) for
   measured plans and timings.
+- `20261122000800_s3_dba_07_department_view_access.sql` aligns the department
+  SELECT policy with the existing Human Resources module-view right; department
+  add/edit/delete continue to use their resource-specific rights.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -380,18 +383,17 @@ by Git.
 
 ## HR query indexes
 
-No additional HR index is proposed in S3-DBA-06. The HR module still shows
-“Coming soon” and has no employee/department/job list or search query to
-benchmark. The generic record-list API fetches rows before applying search in
-Python, so name indexes would not accelerate that search. `get_current_profile`
-and user-management record lookups filter `profiles.id`, whose primary key is
+No additional HR index is proposed in S3-DBA-06. The HR module currently has a
+Department list but no employee or job list. The Department list uses the
+shared record-list API, which fetches rows before applying search in Python, so
+name indexes would not accelerate that search. `get_current_profile` and
+user-management record lookups filter `profiles.id`, whose primary key is
 already indexed; the admin user list filters by role and orders by
 `created_at`. Employee, department, and job codes are primary keys; S3-DBA-02
 already created the partial unique `jobhistory(empno, effdate) WHERE NOT
 is_deleted` index used by the current employee view. Do not add duplicate or
-speculative indexes. Once the HR API queries are implemented, measure
-representative data with `EXPLAIN (ANALYZE, BUFFERS)` before and after any
-candidate index.
+speculative indexes. Measure future HR queries with
+`EXPLAIN (ANALYZE, BUFFERS)` before and after any candidate index.
 
 ## PostgreSQL backup and restore
 
@@ -489,13 +491,17 @@ separate price-history migration adds three price mutation rights, and the
 S2-BLD-01 migration adds the eight guide rights found missing in the checked-in
 catalogue.
 
-Customers and Products are available at `/customers` and `/products`. Their
-shared record list provides search, administrator active/inactive/all filters,
-permission-checked create/edit/soft-delete operations, and administrator-only
-restore. Customer deletion is refused while `sales_active` contains a linked
-sale. Admin/Superadmin rows show Active/Inactive and a stamp; Users see active
-rows only. The Customer form maps to `custno`, `custname`, `address`, and
-`payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
+Departments, Customers, and Products are available at `/human-resources`,
+`/customers`, and `/products`. Their shared record list provides search,
+administrator active/inactive/all filters, permission-checked create/edit/
+soft-delete operations, and administrator-only restore. Department create,
+edit, and delete use their HR resource rights; deleting a department with
+active job-history records is refused. Customer deletion is refused while
+`sales_active` contains a linked sale. Admin/Superadmin rows show
+Active/Inactive and a stamp; Users see active rows only. The Department form
+maps to `deptcode` and `deptname`; the Customer form maps to `custno`,
+`custname`, `address`, and `payterm`; the Product form maps to `prodcode`,
+`description`, and `unit`.
 Product rows link to Price History, which supports dated price creation,
 editing (including the effective date), soft deletion, and administrator
 restore. The Products list displays the latest non-deleted price effective on
@@ -508,9 +514,12 @@ access to Price History; separate Price History Add/Edit/Delete rights control
 mutations. Assign those rights through User Management; the migration does not
 assign them automatically.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
-If the active view, table access, or policies are unavailable, the UI reports
-that database setup is needed. Human Resources, Sales, and Reports currently
-show a Coming soon page.
+Department viewing uses the Human Resources View right. Apply
+`20261122000800_s3_dba_07_department_view_access.sql` after
+`20261109000000_hope_app_access.sql` so the department RLS policy matches that
+view permission. If the active view, table access, or policies are unavailable,
+the UI reports that database setup is needed. Sales and Reports currently show
+a Coming soon page.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing
