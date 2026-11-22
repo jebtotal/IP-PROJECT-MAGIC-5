@@ -131,6 +131,14 @@ function renderRecords(records) {
         `/products/${encodeURIComponent(record[config.keyField])}/price-history`;
       actions.appendChild(priceHistoryButton);
     }
+    if (config.module === "employees" && currentActions.jobHistoryView) {
+      const historyButton = document.createElement("a");
+      historyButton.className = "btn btn-secondary";
+      historyButton.textContent = "Job history";
+      historyButton.href =
+        `/human-resources/employees/${encodeURIComponent(record[config.keyField])}/job-history`;
+      actions.appendChild(historyButton);
+    }
     if (record.isDeleted) {
       if (config.isAdmin && currentActions.delete) {
         addActionButton(actions, "Restore", () => restoreRecord(record));
