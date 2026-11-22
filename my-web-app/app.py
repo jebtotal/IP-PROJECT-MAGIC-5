@@ -69,6 +69,92 @@ WORKSPACE_MODULES = (
     {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
 )
 RECORD_MODULES = {
+    "employees": {
+        "module_slug": "employees",
+        "name": "Employees",
+        "singular": "Employee",
+        "permission": "Human Resources",
+        "rights_module": "hr",
+        "rights_resource": "employees",
+        "rights_view_resource": "hr",
+        "table": "employee",
+        "active_view": "employee_active",
+        "key": "empno",
+        "key_field": "empNo",
+        "display_field": "lastName",
+        "read_only": True,
+        "filters": (
+            {
+                "name": "gender",
+                "label": "Gender",
+                "options": (
+                    {"value": "all", "label": "All genders"},
+                    {"value": "F", "label": "Female"},
+                    {"value": "M", "label": "Male"},
+                ),
+            },
+            {
+                "name": "employment",
+                "label": "Employment",
+                "options": (
+                    {"value": "all", "label": "All employees"},
+                    {"value": "current", "label": "Current"},
+                    {"value": "separated", "label": "Separated"},
+                ),
+            },
+        ),
+        "fields": (
+            {
+                "name": "empNo",
+                "column": "empno",
+                "label": "Employee No",
+                "maxlength": 5,
+                "required": True,
+            },
+            {
+                "name": "lastName",
+                "column": "lastname",
+                "label": "Last Name",
+                "maxlength": 15,
+                "required": False,
+            },
+            {
+                "name": "firstName",
+                "column": "firstname",
+                "label": "First Name",
+                "maxlength": 15,
+                "required": False,
+            },
+            {
+                "name": "gender",
+                "column": "gender",
+                "label": "Gender",
+                "maxlength": 1,
+                "required": False,
+            },
+            {
+                "name": "birthDate",
+                "column": "birthdate",
+                "label": "Birth Date",
+                "maxlength": 10,
+                "required": False,
+            },
+            {
+                "name": "hireDate",
+                "column": "hiredate",
+                "label": "Hire Date",
+                "maxlength": 10,
+                "required": False,
+            },
+            {
+                "name": "sepDate",
+                "column": "sepdate",
+                "label": "Separation Date",
+                "maxlength": 10,
+                "required": False,
+            },
+        ),
+    },
     "jobs": {
         "module_slug": "jobs",
         "name": "Jobs",
@@ -337,6 +423,20 @@ def display_stamp(stamp):
     if parts[0] in action_labels:
         return f"{action_labels[parts[0]]} {parts[1]}" if len(parts) == 2 else action_labels[parts[0]]
     return stamp
+
+
+def employee_is_current(separation_date, today=None):
+    if not separation_date:
+        return True
+    if isinstance(separation_date, datetime):
+        separation_date = separation_date.date()
+    if isinstance(separation_date, date):
+        return separation_date >= (today or datetime.now(MANILA_TIMEZONE).date())
+    try:
+        parsed_date = date.fromisoformat(str(separation_date)[:10])
+    except ValueError:
+        return False
+    return parsed_date >= (today or datetime.now(MANILA_TIMEZONE).date())
 
 
 def get_management_profile():
@@ -613,6 +713,7 @@ def api_check_module_permission(module, action):
 @app.get("/products")
 @app.get("/human-resources")
 @app.get("/human-resources/jobs")
+@app.get("/human-resources/employees")
 @app.get("/sales")
 @app.get("/reports")
 def module_workspace():
@@ -701,6 +802,11 @@ def get_record_access(module_slug, action):
     config = RECORD_MODULES.get(module_slug)
     if config is None:
         return None, None, None, None, (jsonify(error="Unknown module."), 404)
+    if config.get("read_only") and action != "view":
+        return None, None, None, None, (
+            jsonify(error=f"{config['name']} records are read-only."),
+            403,
+        )
     try:
         permissions = get_permissions_for_user(client, profile)
         actions = get_record_actions(client, profile, config, permissions)
@@ -1177,6 +1283,14 @@ def api_list_records(module_slug):
     requested_status = request.args.get("status", "active")
     if requested_status not in {"active", "inactive", "all"}:
         return jsonify(error="Choose Active, Inactive, or All."), 400
+    employee_gender = request.args.get("gender", "all")
+    employee_status = request.args.get("employment", "all")
+    if module_slug == "employees":
+        if employee_gender not in {"all", "F", "M"}:
+            return jsonify(error="Choose a valid gender filter."), 400
+        if employee_status not in {"all", "current", "separated"}:
+            return jsonify(error="Choose a valid employment filter."), 400
+
     is_admin = profile["role"] in {"admin", "superadmin"}
     status_filter = requested_status if is_admin else "active"
     business_columns = [field["column"] for field in config["fields"]]
@@ -1228,6 +1342,15 @@ def api_list_records(module_slug):
             row for row in rows
             if any(search in str(row.get(column) or "").casefold() for column in business_columns)
         ]
+    if module_slug == "employees":
+        if employee_gender != "all":
+            rows = [row for row in rows if row.get("gender") == employee_gender]
+        if employee_status != "all":
+            is_current = employee_status == "current"
+            rows = [
+                row for row in rows
+                if employee_is_current(row.get("sepdate")) is is_current
+            ]
     records = [
         record_response_record(row, config, is_admin)
         for row in rows
@@ -1251,7 +1374,10 @@ def api_list_records(module_slug):
         records=records,
         counts=counts if is_admin else None,
         is_admin=is_admin,
-        actions={action: actions[action] for action in ("create", "edit", "delete")},
+        actions={
+            action: actions[action] and not config.get("read_only", False)
+            for action in ("create", "edit", "delete")
+        },
     )
 
 
