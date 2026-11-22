@@ -47,7 +47,7 @@
 
     <p id="records-message" class="table-message" role="status" aria-live="polite"></p>
     <div class="table-wrap">
-      <table id="record-table" class="management-table record-table" data-record-module="{{ record_config.module_slug }}">
+      <table id="record-table" class="management-table record-table" data-record-module="{{ record_config.module_slug }}" data-admin="{{ 'true' if is_admin else 'false' }}">
         <thead id="record-head"></thead>
         <tbody id="record-body"></tbody>
       </table>

@@ -498,11 +498,15 @@ rows only. The Customer form maps to `custno`, `custname`, `address`, and
 `payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
 Product rows link to Price History, which supports dated price creation,
 editing (including the effective date), soft deletion, and administrator
-restore. Product View controls access to the history; the separate Price
-History Add/Edit/Delete rights control mutations. Apply
+restore. The Products list displays the latest non-deleted price effective on
+the current Asia/Manila business date; products without a price effective yet
+show a dash. Apply
 `20261110000000_s1_dba_07_price_history_rights.sql` after the access-control
-and HOPE app-access migrations, then assign the new rights through User
-Management. No rights are automatically assigned by that migration.
+and HOPE app-access migrations, then apply
+`20261120000000_s1_dba_08_current_product_price.sql`. Product View controls
+access to Price History; separate Price History Add/Edit/Delete rights control
+mutations. Assign those rights through User Management; the migration does not
+assign them automatically.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
 If the active view, table access, or policies are unavailable, the UI reports
 that database setup is needed. Human Resources, Sales, and Reports currently
