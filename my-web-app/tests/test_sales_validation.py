@@ -186,6 +186,86 @@ class SalesStatusRouteTests(unittest.TestCase):
         )
 
 
+class AuditLogAccessTests(unittest.TestCase):
+    class RpcClient:
+        def __init__(self, data):
+            self.data = data
+            self.calls = []
+
+        def rpc(self, name, params):
+            self.calls.append((name, params))
+            return self
+
+        def execute(self):
+            return type("Response", (), {"data": self.data})()
+
+    def test_audit_filters_validate_page_and_search_length(self):
+        filters, error = web_app.parse_audit_log_filters(
+            {"page": "2", "search": " sales "}
+        )
+        self.assertIsNone(error)
+        self.assertEqual(filters, {
+            "search": "sales",
+            "page": 2,
+            "page_size": 50,
+            "offset": 50,
+        })
+
+        for args in (
+            {"page": "0"},
+            {"page": "20002"},
+            {"page": "invalid"},
+            {"search": "x" * 201},
+        ):
+            with self.subTest(args=args):
+                filters, error = web_app.parse_audit_log_filters(args)
+                self.assertIsNone(filters)
+                self.assertIsNotNone(error)
+
+    def test_non_superadmin_cannot_open_audit_api(self):
+        with patch.object(
+            web_app,
+            "get_management_profile",
+            return_value=(object(), {"role": "admin"}),
+        ):
+            response = web_app.app.test_client().get("/api/audit-log")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_superadmin_audit_api_uses_paginated_read_rpc(self):
+        rpc_client = self.RpcClient({"rows": [{"event_type": "hope.sales.ADD"}], "total": 1})
+        with patch.object(
+            web_app,
+            "get_management_profile",
+            return_value=(rpc_client, {"role": "superadmin"}),
+        ):
+            response = web_app.app.test_client().get(
+                "/api/audit-log?page=2&search=sales"
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["rows"], [{"event_type": "hope.sales.ADD"}])
+        self.assertEqual(rpc_client.calls, [(
+            "hope_read_audit_log",
+            {"p_search": "sales", "p_limit": 50, "p_offset": 50},
+        )])
+
+    def test_audit_migration_supports_profiles_without_is_deleted(self):
+        migration = (
+            APP_DIR
+            / "supabase"
+            / "migrations"
+            / "20261122001400_s1_bld_09_audit_log_viewer.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("'profiles', 'is_deleted'", migration)
+        self.assertNotIn("profile.is_deleted", migration)
+        self.assertIn(
+            "COALESCE((to_jsonb(profile) ->> 'is_deleted')::BOOLEAN, FALSE)",
+            migration,
+        )
+
+
 class ReportFilterTests(unittest.TestCase):
     def test_top_reports_require_valid_date_range_and_bounded_top_n(self):
         filters, error = web_app.parse_report_filters(

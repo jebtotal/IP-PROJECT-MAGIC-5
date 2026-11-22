@@ -1274,6 +1274,85 @@ def user_management():
     )
 
 
+@app.get("/audit-log")
+def audit_log_viewer():
+    client, profile = get_management_profile()
+    if client is None:
+        return redirect(url_for("login"))
+    if profile is None or profile.get("role") != "superadmin":
+        abort(403)
+    try:
+        sidebar_modules = module_cards(get_permissions_for_user(client, profile))
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Sidebar permissions could not be loaded")
+        sidebar_modules = []
+    return render_template(
+        "audit_log.html",
+        profile=profile,
+        sidebar_modules=sidebar_modules,
+    )
+
+
+def parse_audit_log_filters(args):
+    search = args.get("search", "").strip()
+    if len(search) > 200:
+        return None, "Search must be 200 characters or fewer."
+    try:
+        page = int(args.get("page", "1"))
+    except (TypeError, ValueError):
+        return None, "Choose a valid page."
+    if page < 1 or page > 20001:
+        return None, "Choose a valid page."
+    page_size = 50
+    return {
+        "search": search,
+        "page": page,
+        "page_size": page_size,
+        "offset": (page - 1) * page_size,
+    }, None
+
+
+@app.get("/api/audit-log")
+def api_audit_log():
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None or profile.get("role") != "superadmin":
+        return jsonify(error="Superadmin access is required."), 403
+    filters, validation_error = parse_audit_log_filters(request.args)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_read_audit_log",
+            {
+                "p_search": filters["search"],
+                "p_limit": filters["page_size"],
+                "p_offset": filters["offset"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="Superadmin access is required."), 403
+        return record_error_response(error, {"name": "Audit log"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Audit log"})
+    data = response.data
+    if (
+        not isinstance(data, Mapping)
+        or not isinstance(data.get("rows"), list)
+        or not isinstance(data.get("total"), int)
+    ):
+        app.logger.error("Audit log RPC returned an invalid response")
+        return jsonify(error="Audit log could not be loaded."), 502
+    return jsonify(
+        rows=data["rows"],
+        total=data["total"],
+        page=filters["page"],
+        pageSize=filters["page_size"],
+    )
+
+
 def get_record_access(module_slug, action):
     client = get_authenticated_client()
     if client is None:
