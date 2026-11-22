@@ -46,6 +46,50 @@ MODULE_SLUGS = {
     "Sales": "sales",
     "Reports": "reports",
 }
+REPORTS = {
+    "products_master": {
+        "right": "reports.productsMaster.view",
+        "resource": "products_master",
+        "name": "Product Master List",
+        "filters": (),
+    },
+    "active_employees": {
+        "right": "reports.activeEmployees.view",
+        "resource": "active_employees",
+        "name": "Active Employees",
+        "filters": (),
+    },
+    "all_employees": {
+        "right": "reports.allEmployees.view",
+        "resource": "all_employees",
+        "name": "All Employees",
+        "filters": (),
+    },
+    "employee_job_history": {
+        "right": "reports.employeeJobHistory.view",
+        "resource": "employee_job_history",
+        "name": "Employee Job History",
+        "filters": ("employee",),
+    },
+    "top_customers": {
+        "right": "reports.topCustomers.view",
+        "resource": "top_customers",
+        "name": "Top Customers",
+        "filters": ("date_range", "top_n"),
+    },
+    "top_products": {
+        "right": "reports.topProducts.view",
+        "resource": "top_products",
+        "name": "Top Products",
+        "filters": ("date_range", "top_n"),
+    },
+    "top_sales": {
+        "right": "reports.topSales.view",
+        "resource": "top_sales",
+        "name": "Top Sales",
+        "filters": ("date_range", "top_n"),
+    },
+}
 WORKSPACE_MODULES = (
     {
         "name": "Customer",
@@ -619,7 +663,9 @@ def rights_to_permissions(catalog, assignments):
     for right in catalog:
         if right["right_code"] not in granted:
             continue
-        if right.get("resource_code") == "price_history":
+        if right.get("resource_code") in {
+            report["resource"] for report in REPORTS.values()
+        }:
             continue
         module = module_names.get(right["module_code"])
         if module is None:
@@ -636,7 +682,9 @@ def rights_to_permissions(catalog, assignments):
 def permissions_to_rights(catalog, permissions):
     selected = []
     for right in catalog:
-        if right.get("resource_code") == "price_history":
+        if right.get("resource_code") in {
+            report["resource"] for report in REPORTS.values()
+        }:
             continue
         module = {
             "customers": "Customer",
@@ -811,6 +859,29 @@ def module_workspace():
             module=module,
             is_admin=profile["role"] in {"admin", "superadmin"},
             today=datetime.now(MANILA_TIMEZONE).date().isoformat(),
+            sidebar_modules=module_cards(permissions),
+        )
+    if allowed and slug == "reports":
+        try:
+            report_rights = get_report_rights(client, profile)
+        except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+            app.logger.exception("Report rights could not be loaded")
+            return render_template(
+                "reports.html",
+                profile=profile,
+                module=module,
+                report_rights=[],
+                today=datetime.now(MANILA_TIMEZONE).date().isoformat(),
+                permission_error=True,
+                sidebar_modules=module_cards(permissions),
+            ), 503
+        return render_template(
+            "reports.html",
+            profile=profile,
+            module=module,
+            report_rights=report_rights,
+            today=datetime.now(MANILA_TIMEZONE).date().isoformat(),
+            permission_error=False,
             sidebar_modules=module_cards(permissions),
         )
     record_slug = (
@@ -1418,6 +1489,83 @@ def sales_payment_error_response(error):
         if error.code == "P0001" and "receipt number" in str(error).lower():
             return jsonify(error="A receipt number could not be allocated. Contact an administrator."), 503
     return record_error_response(error, {"name": "Sales payment"})
+
+
+def get_report_rights(client, profile):
+    if profile["role"] in {"admin", "superadmin"}:
+        return list(REPORTS)
+    right_codes = [report["right"] for report in REPORTS.values()]
+    assignments = (
+        client.table("user_permission")
+        .select("right_code")
+        .eq("user_id", profile["id"])
+        .eq("is_deleted", False)
+        .in_("right_code", right_codes)
+        .execute()
+    )
+    granted = {row["right_code"] for row in assignments.data or []}
+    return [
+        slug for slug, report in REPORTS.items()
+        if report["right"] in granted
+    ]
+
+
+def parse_report_filters(report_slug, query):
+    filters = {"start_date": None, "end_date": None, "top_n": 10, "employee_no": None}
+    report = REPORTS[report_slug]
+    if "date_range" in report["filters"]:
+        start_value = query.get("startDate")
+        end_value = query.get("endDate")
+        try:
+            start_date = date.fromisoformat(start_value or "")
+            end_date = date.fromisoformat(end_value or "")
+        except ValueError:
+            return None, "Enter a valid start and end date."
+        if start_date.isoformat() != start_value or end_date.isoformat() != end_value:
+            return None, "Enter a valid start and end date."
+        if end_date < start_date:
+            return None, "End date must be on or after the start date."
+        filters["start_date"] = start_date.isoformat()
+        filters["end_date"] = end_date.isoformat()
+        raw_top_n = query.get("topN", "10")
+        if not raw_top_n.isdecimal():
+            return None, "Top N must be a whole number between 1 and 100."
+        top_n = int(raw_top_n)
+        if not 1 <= top_n <= 100:
+            return None, "Top N must be a whole number between 1 and 100."
+        filters["top_n"] = top_n
+    if "employee" in report["filters"]:
+        employee_no = query.get("employeeNo", "").strip()
+        if len(employee_no) > 5:
+            return None, "Choose a valid employee."
+        filters["employee_no"] = employee_no or None
+    return filters, None
+
+
+def get_report_access(report_slug):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, (jsonify(error="You must be logged in."), 401)
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, (jsonify(error="This account is not active."), 403)
+    report = REPORTS.get(report_slug)
+    if report is None:
+        return None, None, None, (jsonify(error="Unknown report."), 404)
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        if not has_permission(permissions, "Reports", "view"):
+            return None, None, None, (jsonify(error="Reports View access is required."), 403)
+        granted_reports = get_report_rights(client, profile)
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Report permissions could not be loaded")
+        return None, None, None, (
+            jsonify(error="Report permissions need database setup or could not be checked."),
+            503,
+        )
+    if report_slug not in granted_reports:
+        return None, None, None, (jsonify(error="You do not have permission to view this report."), 403)
+    return client, profile, report, None
 
 
 def record_error_response(error, config):
@@ -2109,6 +2257,44 @@ def api_sales_options():
     return jsonify(
         customers=options.get("customers", []),
         salespeople=options.get("salespeople", []),
+    )
+
+
+@app.get("/api/reports/<report_slug>")
+def api_run_report(report_slug):
+    client, _profile, _report, error = get_report_access(report_slug)
+    if error:
+        return error
+    filters, validation_error = parse_report_filters(report_slug, request.args)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_run_report",
+            {
+                "p_report": report_slug,
+                "p_start_date": filters["start_date"],
+                "p_end_date": filters["end_date"],
+                "p_top_n": filters["top_n"],
+                "p_empno": filters["employee_no"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="You do not have permission to view this report."), 403
+        if error.code == "P0002":
+            return jsonify(error="Choose an active employee."), 404
+        return record_error_response(error, {"name": "Report"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Report"})
+    if not isinstance(response.data, Mapping) or not isinstance(response.data.get("rows"), list):
+        app.logger.error("Report RPC returned an invalid response for %s", report_slug)
+        return jsonify(error="Report data could not be loaded."), 502
+    return jsonify(
+        report=report_slug,
+        title=REPORTS[report_slug]["name"],
+        rows=response.data["rows"],
+        employeeOptions=response.data.get("employeeOptions", []),
     )
 
 

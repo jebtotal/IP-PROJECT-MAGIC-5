@@ -369,6 +369,16 @@ The HOPE schema is split into timestamp-ordered migrations:
   `20261122000800_s4_dba_01_02_sales_balance_views.sql`,
   `20261122000900_s4_bld_01_sales_header.sql`, and
   `20261122001000_s4_bld_02_sales_details.sql`.
+- `20261122001200_s4_bld_04_reports.sql` installs the individual report rights
+  and permission-checked data function. It provides Product Master List,
+  Active Employees, All Employees, Employee Job History, Top Customers,
+  Top Products, and Top Sales. Ranked reports require inclusive start/end dates
+  and Top N from 1 to 100. Employee Job History requires an employee selection
+  and includes salary only for users with that report's right. Apply after the
+  S1 report-rights catalogue seed, employee-current and price-as-of migrations,
+  and `20261122000800_s4_dba_01_02_sales_balance_views.sql`.
+  Each report right is assigned independently in User Management, in addition
+  to Reports View. Print / Save as PDF uses the browser print dialog.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -568,13 +578,15 @@ the UI reports that database setup is needed. Sales View users can search the
 Sales list; users with Sales Add can create a sale using active Customer and
 Salesperson choices. The transaction number is assigned by the database when
 the header is saved. Apply
-`20261122000900_s4_bld_01_sales_header.sql` before using Sales; Reports still
-shows a Coming soon page. Apply
+`20261122000900_s4_bld_01_sales_header.sql` before using Sales. Apply
 `20261122001000_s4_bld_02_sales_details.sql` to enable Sales line items; the
 separate Sales Details View/Add/Edit/Delete rights govern detail visibility and
 mutations. Assign those rights through User Management. Apply
 `20261122001100_s4_bld_03_sales_payments.sql` to enable payment recording
 against active transactions; the Sales Add right controls payment entry.
+Apply `20261122001200_s4_bld_04_reports.sql` to enable Reports. Users need both
+Reports View and each report's dedicated View right; assign them independently
+through User Management.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing
