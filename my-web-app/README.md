@@ -150,6 +150,17 @@ The HOPE schema is split into timestamp-ordered migrations:
   `supabase/tests/s3_dba_02_jobhistory_unique_effdate.sql` tests valid inserts,
   duplicate rejection, and rejecting a conflicting soft-delete restore; it
   rolls back all test rows.
+- `20261122000200_s3_dba_03_profile_employee_link.sql` adds nullable
+  `profiles.empno` referencing the `VARCHAR(5)` employee primary key. Existing
+  profiles remain unlinked; no employee assignments are inferred. A unique
+  index allows multiple NULL links but limits each employee to one profile.
+  `ON DELETE SET NULL` clears only the optional link if an employee is
+  physically removed; soft-deleting an employee does not affect the profile
+  or its Supabase Auth login. The current profiles policy revokes direct
+  authenticated updates, so linking is a privileged/admin database operation.
+  `supabase/tests/s3_dba_03_profile_employee_link.sql` verifies a valid link,
+  foreign-key and uniqueness rejection, and unchanged profile/Auth identity
+  in a scratch/copy database; it rolls back all test rows.
 
 
 Confirm the target project and review existing HOPE relations before applying
