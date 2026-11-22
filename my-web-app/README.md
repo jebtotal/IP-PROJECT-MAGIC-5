@@ -161,6 +161,32 @@ The HOPE schema is split into timestamp-ordered migrations:
   `supabase/tests/s3_dba_03_profile_employee_link.sql` verifies a valid link,
   foreign-key and uniqueness rejection, and unchanged profile/Auth identity
   in a scratch/copy database; it rolls back all test rows.
+- `20261122000300_s3_dba_04_child_delete_guards.sql` extends the employee
+  soft-delete guard to block deletion while a profile is linked, with an
+  explicit unlink-first error. Active job history or sales also block employee
+  soft-delete; active job history blocks soft-deleting its department or job.
+  Soft-deleted history/sales rows do not block these checks. Parent restore is
+  allowed; the app's update guard requires delete permission and limits
+  restores to administrators. Direct DELETE/TRUNCATE remains blocked by the
+  existing hard-delete trigger.
+
+  Foreign-key references and physical-delete actions:
+
+  | Parent key | Referencing table/column | ON DELETE |
+  | --- | --- | --- |
+  | `employee.empno` | `jobhistory.empno` | NO ACTION |
+  | `employee.empno` | `sales.empno` | NO ACTION |
+  | `employee.empno` | `profiles.empno` | SET NULL |
+  | `department.deptcode` | `jobhistory.deptcode` | NO ACTION |
+  | `job.jobcode` | `jobhistory.jobcode` | NO ACTION |
+
+  There are no direct department/job columns on employee; job and department
+  assignments are represented by job-history rows. Run
+  `supabase/tests/s3_dba_04_child_delete_guards.sql` only against a scratch or
+  copied database that has an approved admin/superadmin profile with NULL
+  `empno`; it lists the live FK and trigger definitions and tests active-child
+  blocks, ignored archived children, linked-profile blocks, and restore
+  behavior. The test rolls back all fixtures and the temporary profile link.
 
 
 Confirm the target project and review existing HOPE relations before applying
