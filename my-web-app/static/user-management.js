@@ -2,6 +2,8 @@ const addForm = document.querySelector("#add-user-form");
 const addMessage = document.querySelector("#add-user-message");
 const usersMessage = document.querySelector("#users-message");
 const usersTable = document.querySelector("#users-table");
+const userTabs = document.querySelector("#user-tabs");
+const userSearch = document.querySelector("#user-search");
 const rightsDialog = document.querySelector("#rights-dialog");
 const rightsForm = document.querySelector("#rights-form");
 const rightsMatrix = document.querySelector("#rights-matrix");
@@ -25,24 +27,33 @@ const rightResourceLabels = {
   departments: "Department",
   employees: "Employee",
   job_history: "Job History",
+  hr: "Human Resources",
   sales: "Sale",
   sale_details: "Sale Detail",
+  reports: "Reports",
   top_customers: "Top Customers",
+  top_products: "Top Products",
+  active_employees: "Active Employees",
+  all_employees: "All Employees",
+  employee_job_history: "Employee Job History",
+  top_sales: "Top Sales",
   products_master: "Product Master List",
-  price_history: "Price History",
+  price_history: "Price",
 };
 let rightsTarget = null;
 let editUserTarget = null;
+let currentUserStatus = "active";
+let userSearchTimer;
 
 function showMessage(element, message) {
   element.textContent = message;
 }
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {"Content-Type": "application/json", ...options.headers},
-    ...options,
-  });
+  const headers = {"Content-Type": "application/json", ...options.headers};
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const response = await fetch(url, {...options, headers});
   const result = await response.json();
   if (!response.ok) {
     throw new Error(result.error || "Request could not be completed.");
@@ -77,15 +88,22 @@ function renderRights(catalog, selected) {
     moduleToggle.type = "checkbox";
     moduleToggle.setAttribute("aria-label", `${module.name} View`);
     moduleToggle.dataset.viewToggle = module.code;
-    const viewRight = moduleRights.find((right) => right.action === "view");
+    const viewRight = moduleRights.find((right) => right.right_code === `${module.code}.view`);
     moduleToggle.disabled = !viewRight;
-    moduleToggle.checked = Boolean(viewRight && selected.includes(viewRight.right_code));
-    moduleToggle.addEventListener("change", () => {
-      const checkbox = section.querySelector(`input[data-right="${CSS.escape(viewRight.right_code)}"]`);
-      if (checkbox) checkbox.checked = moduleToggle.checked;
-    });
     legend.append(moduleToggle, document.createTextNode(` ${module.name}`));
     section.appendChild(legend);
+
+    const updateModuleToggle = () => {
+      const viewCheckbox = [...section.querySelectorAll("input[data-right]")]
+        .find((checkbox) => checkbox.dataset.right === viewRight?.right_code);
+      moduleToggle.checked = Boolean(viewCheckbox?.checked);
+    };
+
+    moduleToggle.addEventListener("change", () => {
+      const viewCheckbox = [...section.querySelectorAll("input[data-right]")]
+        .find((checkbox) => checkbox.dataset.right === viewRight?.right_code);
+      if (viewCheckbox) viewCheckbox.checked = moduleToggle.checked;
+    });
 
     const controls = document.createElement("div");
     controls.className = "rights-group-controls";
@@ -98,7 +116,7 @@ function renderRights(catalog, selected) {
         section.querySelectorAll("input[data-right]").forEach((checkbox) => {
           checkbox.checked = value === "All";
         });
-        moduleToggle.checked = Boolean(viewRight && value === "All");
+        updateModuleToggle();
       });
       controls.appendChild(button);
     }
@@ -118,12 +136,11 @@ function renderRights(catalog, selected) {
       checkbox.setAttribute("aria-label", `${module.name}: ${rightLabel}`);
       checkbox.dataset.right = right.right_code;
       checkbox.checked = selected.includes(right.right_code);
-      checkbox.addEventListener("change", () => {
-        if (right.action === "view") moduleToggle.checked = checkbox.checked;
-      });
+      checkbox.addEventListener("change", updateModuleToggle);
       label.append(checkbox, document.createTextNode(rightLabel));
       section.appendChild(label);
     }
+    updateModuleToggle();
     rightsMatrix.appendChild(section);
   }
 }
@@ -210,6 +227,7 @@ function renderUsers(users) {
   usersTable.replaceChildren();
   for (const user of users) {
     const row = document.createElement("tr");
+    if (user.isDeleted) row.classList.add("record-deleted");
     addCell(row, user.full_name || "—", "Name", user.full_name || "");
     addCell(row, user.email || "—", "Email", user.email || "");
     const roleCell = addCell(row, "", "Role");
@@ -219,18 +237,36 @@ function renderUsers(users) {
       superadmin: "role-superadmin-badge",
     }[user.role] || "";
     addBadge(roleCell, user.role, `status-badge ${roleClass}`.trim());
-    const statusCell = addCell(row, "", "Status");
+    const accountStatusCell = addCell(row, "", "Account Status");
     const statusClass = {
       approved: "status-approved",
       pending: "status-pending",
       blocked: "status-blocked",
     }[user.status] || "";
-    addBadge(statusCell, user.status, `status-badge ${statusClass}`.trim());
+    addBadge(accountStatusCell, user.status, `status-badge ${statusClass}`.trim());
+    const statusCell = addCell(row, "", "Status");
+    addBadge(
+      statusCell,
+      user.isDeleted ? "Inactive" : "Active",
+      `status-badge ${user.isDeleted ? "status-inactive" : "status-approved"}`,
+    );
+    addCell(row, user.stamp || "—", "Stamp", user.stamp || "");
 
     const actionsCell = document.createElement("td");
     actionsCell.dataset.label = "Actions";
     if (window.isAdmin && user.role !== "user") {
       actionsCell.textContent = "—";
+      row.appendChild(actionsCell);
+      usersTable.appendChild(row);
+      continue;
+    }
+    if (user.isDeleted) {
+      const restoreButton = document.createElement("button");
+      restoreButton.type = "button";
+      restoreButton.className = "btn btn-secondary";
+      restoreButton.textContent = "Restore";
+      restoreButton.addEventListener("click", () => restoreUser(user));
+      actionsCell.appendChild(restoreButton);
       row.appendChild(actionsCell);
       usersTable.appendChild(row);
       continue;
@@ -244,23 +280,33 @@ function renderUsers(users) {
     editButton.addEventListener("click", () => editUser(user));
     actions.appendChild(editButton);
 
-    const rightsButton = document.createElement("button");
-    rightsButton.type = "button";
-    rightsButton.className = "btn btn-secondary";
-    rightsButton.textContent = "Rights";
-    rightsButton.addEventListener("click", () => openRights(user));
-    actions.appendChild(rightsButton);
+    if (user.role !== "superadmin") {
+      const rightsButton = document.createElement("button");
+      rightsButton.type = "button";
+      rightsButton.className = "btn btn-secondary";
+      rightsButton.textContent = "Rights";
+      rightsButton.addEventListener("click", () => openRights(user));
+      actions.appendChild(rightsButton);
+    }
 
-    const statusButton = document.createElement("button");
-    statusButton.type = "button";
-    statusButton.className = "btn btn-secondary";
-    statusButton.textContent =
-      user.status === "pending" ? "Approve" :
-      user.status === "blocked" ? "Unblock" : "Block";
-    statusButton.addEventListener("click", () => updateStatus(user));
-    actions.appendChild(statusButton);
+    if (user.status === "pending" && window.isAdmin) {
+      const approvalNote = document.createElement("span");
+      approvalNote.textContent = "Awaiting Superadmin approval";
+      actions.appendChild(approvalNote);
+    } else {
+      const statusButton = document.createElement("button");
+      statusButton.type = "button";
+      statusButton.className = "btn btn-secondary";
+      statusButton.textContent = user.status === "pending"
+        ? "Approve"
+        : user.blocked || user.status === "blocked" ? "Unblock" : "Block";
+      statusButton.disabled = user.isLastSuperadmin && !user.blocked;
+      if (statusButton.disabled) statusButton.title = "The last active Superadmin cannot be blocked.";
+      statusButton.addEventListener("click", () => updateStatus(user));
+      actions.appendChild(statusButton);
+    }
 
-    if (window.isSuperadmin && user.role !== "admin") {
+    if (window.isSuperadmin && user.role === "user") {
       const adminButton = document.createElement("button");
       adminButton.type = "button";
       adminButton.className = "btn btn-secondary";
@@ -283,10 +329,16 @@ function renderUsers(users) {
       removeButton.type = "button";
       removeButton.className = "btn btn-danger";
       removeButton.textContent = "Remove";
+      removeButton.disabled = user.isLastSuperadmin || user.isOnlySuperadmin;
+      if (removeButton.disabled) removeButton.title = "The last Superadmin cannot be removed.";
       removeButton.addEventListener("click", () => removeUser(user));
       actions.appendChild(removeButton);
     }
-    actionsCell.appendChild(actions);
+    if (actions.childElementCount) {
+      actionsCell.appendChild(actions);
+    } else {
+      actionsCell.textContent = "—";
+    }
     row.appendChild(actionsCell);
     usersTable.appendChild(row);
   }
@@ -294,8 +346,16 @@ function renderUsers(users) {
 
 async function loadUsers() {
   try {
-    const result = await request("/api/users");
+    const params = new URLSearchParams({
+      status: currentUserStatus,
+      search: userSearch.value.trim(),
+    });
+    const result = await request(`/api/users?${params}`);
     renderUsers(result.users);
+    for (const status of ["active", "inactive", "all"]) {
+      const count = document.querySelector(`[data-count="${status}"]`);
+      if (count) count.textContent = result.counts[status] ?? 0;
+    }
     showMessage(usersMessage, "");
   } catch (error) {
     showMessage(usersMessage, error instanceof Error ? error.message : "Users could not be loaded.");
@@ -338,7 +398,7 @@ async function updateRole(user, role) {
 }
 
 async function removeUser(user) {
-  if (!(await window.confirmAction(`Remove ${user.email}? This cannot be undone.`))) {
+  if (!(await window.confirmAction(`Move ${user.email} to Inactive? A Superadmin can restore this account.`))) {
     return;
   }
   try {
@@ -346,6 +406,15 @@ async function removeUser(user) {
     await loadUsers();
   } catch (error) {
     showMessage(usersMessage, error instanceof Error ? error.message : "User could not be removed.");
+  }
+}
+
+async function restoreUser(user) {
+  try {
+    await request(`/api/users/${user.id}/restore`, {method: "PATCH"});
+    await loadUsers();
+  } catch (error) {
+    showMessage(usersMessage, error instanceof Error ? error.message : "User could not be restored.");
   }
 }
 
@@ -360,13 +429,29 @@ addForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(Object.fromEntries(new FormData(addForm).entries())),
     });
     addForm.reset();
-    showMessage(addMessage, "User added successfully.");
+    showMessage(addMessage, "Approved account created. The user must set a new password at first login.");
     await loadUsers();
   } catch (error) {
     showMessage(addMessage, error instanceof Error ? error.message : "User could not be added.");
   } finally {
     submitButton.disabled = false;
   }
+});
+
+userTabs.addEventListener("click", (event) => {
+  const tab = event.target.closest("[data-status]");
+  if (!tab) return;
+  currentUserStatus = tab.dataset.status;
+  userTabs.querySelectorAll(".record-tab").forEach((button) => {
+    button.classList.toggle("is-active", button === tab);
+    button.setAttribute("aria-selected", String(button === tab));
+  });
+  loadUsers();
+});
+
+userSearch.addEventListener("input", () => {
+  window.clearTimeout(userSearchTimer);
+  userSearchTimer = window.setTimeout(loadUsers, 180);
 });
 
 loadUsers();

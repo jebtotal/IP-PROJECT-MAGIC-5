@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Price Form — PentadERP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../shared/tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+</head>
+<body class="min-h-screen">
+  <div class="min-h-screen lg:flex">
+    <aside class="hidden w-64 shrink-0 flex-col bg-slate-950 text-gray-400 lg:flex">
+      <a href="#" class="flex h-20 items-center gap-3 border-b border-gray-800/60 px-6" aria-label="PentadERP dashboard"><span class="pentad-logo h-8 w-8 shrink-0" role="img" aria-label="PentadERP logo"></span><span class="text-lg font-black text-white">Pentad<span class="text-brand-500">ERP</span></span></a>
+      <nav class="flex-1 space-y-2 px-4 py-6" aria-label="Main navigation">
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-grid-2 w-4 text-center" aria-hidden="true"></i>Dashboard</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-address-book w-4 text-center" aria-hidden="true"></i>Customers</a>
+        <a href="#" aria-current="page" class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 px-4 py-3 text-xs font-bold text-white"><i class="fa-solid fa-boxes-stacked w-4 text-center" aria-hidden="true"></i>Products</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-id-card w-4 text-center" aria-hidden="true"></i>Human Resources</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-cart-shopping w-4 text-center" aria-hidden="true"></i>Sales</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-chart-column w-4 text-center" aria-hidden="true"></i>Reports</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-users w-4 text-center" aria-hidden="true"></i>User Management</a>
+      </nav>
+      <div class="border-t border-gray-800/60 p-4"><div class="flex items-center gap-3 rounded-2xl border border-gray-800/80 bg-slate-900 p-3"><span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-sm font-bold text-white" aria-hidden="true">U</span><div class="min-w-0 flex-1"><p class="truncate text-xs font-bold text-white">Signed-in user</p><p class="text-[10px] font-extrabold uppercase tracking-wider text-brand-500">Superadmin</p></div><button type="button" class="text-gray-400 hover:text-white" aria-label="Log out"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i></button></div></div>
+    </aside>
+    <div class="flex min-w-0 flex-1 flex-col">
+      <header class="glass-panel flex min-h-20 items-center justify-between gap-4 border-b border-gray-200/50 bg-white/80 px-4 dark:border-gray-800/50 dark:bg-slate-900/80 sm:px-8"><div class="min-w-0"><span class="text-xs font-bold text-gray-500 dark:text-gray-400">PentadERP / WORKSPACE</span><span class="ml-3 text-sm font-black text-gray-900 dark:text-white lg:hidden">PentadERP</span></div><div class="flex shrink-0 items-center gap-3"><span class="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-brand-600 dark:text-brand-400">Superadmin</span><button type="button" class="rounded-xl border border-gray-200 p-2.5 text-gray-600 dark:border-gray-800 dark:text-gray-300" aria-label="Toggle light and dark theme" title="Toggle theme"><i class="fa-solid fa-moon dark:hidden" aria-hidden="true"></i><i class="fa-solid fa-sun hidden text-amber-400 dark:block" aria-hidden="true"></i></button></div></header>
+      <main class="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
+        <section class="mb-6" aria-labelledby="page-title"><span class="inline-flex items-center gap-2 rounded-full bg-brand-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-brand-600 dark:text-brand-400"><span class="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true"></span>Products Module</span><div class="mt-3 flex flex-wrap items-center gap-3"><h1 id="page-title" class="text-2xl font-black tracking-tight text-gray-900 dark:text-white sm:text-3xl">Price History</h1><span class="rounded-full bg-amber-500/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-500">Not built yet</span></div><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">P-001 · Industrial Widget A · pcs</p></section>
+        <section class="grid gap-6 xl:grid-cols-2" aria-label="Add and proposed edit price form mockups">
+          <article class="glass-panel rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-labelledby="add-price-title">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="add-price-title" class="text-base font-bold text-gray-900 dark:text-white">Add Price</h2><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:bg-slate-950 dark:text-gray-400">Not built yet</span></div>
+            <section class="modal-content glass-panel relative rounded-3xl bg-white p-5 dark:bg-slate-900 sm:p-7" aria-label="Add price form">
+              <button type="button" class="absolute right-5 top-5 text-gray-400 hover:text-gray-700 dark:hover:text-white" aria-label="Close add price form"><i class="fa-solid fa-xmark text-lg" aria-hidden="true"></i></button>
+              <span class="block text-[10px] font-bold uppercase tracking-wider text-gray-400">Price Details</span>
+              <h3 class="mb-5 mt-2 text-2xl font-black text-gray-900 dark:text-white">Add Price</h3>
+              <form class="space-y-4">
+                <div><label for="add-prod-code" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Product Code</label><input id="add-prod-code" type="text" value="P-001" readonly class="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-800 dark:bg-slate-950 dark:text-gray-400"></div>
+                <div><label for="add-eff-date" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Effective Date</label><input id="add-eff-date" type="date" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white"></div>
+                <div><label for="add-unit-price" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Unit Price ($)</label><input id="add-unit-price" type="number" min="0" step="0.01" value="13.75" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white"></div>
+                <div class="flex flex-col-reverse items-stretch gap-3 pt-4 sm:flex-row sm:items-center"><button type="button" class="flex-1 rounded-xl bg-brand-600 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-brand-600/25">Save Price</button><button type="button" class="rounded-xl border border-gray-200 px-5 py-3 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Cancel</button></div>
+              </form>
+            </section>
+            <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">The reference defaults Effective Date to today. This static form leaves it blank because the supplied sample has no effective date.</p>
+          </article>
+          <article class="glass-panel rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-labelledby="edit-price-title">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 id="edit-price-title" class="text-base font-bold text-gray-900 dark:text-white">Edit Price <span class="rounded-full bg-gray-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:bg-slate-950 dark:text-gray-400">Proposed</span></h2><span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:bg-slate-950 dark:text-gray-400">Not built yet</span></div>
+            <section class="modal-content glass-panel relative rounded-3xl bg-white p-5 dark:bg-slate-900 sm:p-7" aria-label="Proposed edit price form">
+              <button type="button" class="absolute right-5 top-5 text-gray-400 hover:text-gray-700 dark:hover:text-white" aria-label="Close edit price form"><i class="fa-solid fa-xmark text-lg" aria-hidden="true"></i></button>
+              <span class="block text-[10px] font-bold uppercase tracking-wider text-gray-400">Price Details</span>
+              <h3 class="mb-5 mt-2 text-2xl font-black text-gray-900 dark:text-white">Edit Price <span class="align-middle rounded-full bg-gray-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-gray-500 dark:bg-slate-950 dark:text-gray-400">Proposed</span></h3>
+              <form class="space-y-4">
+                <div><label for="edit-prod-code" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Product Code</label><input id="edit-prod-code" type="text" value="P-001" readonly class="w-full rounded-xl border border-gray-200 bg-gray-100 px-4 py-2.5 text-xs text-gray-500 dark:border-gray-800 dark:bg-slate-950 dark:text-gray-400"></div>
+                <div><label for="edit-eff-date" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Effective Date <span class="rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] dark:bg-slate-950">Proposed</span></label><input id="edit-eff-date" type="date" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white"></div>
+                <div><label for="edit-unit-price" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Unit Price ($)</label><input id="edit-unit-price" type="number" min="0" step="0.01" value="13.75" required class="w-full rounded-xl border border-gray-200 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-brand-500 dark:border-gray-800 dark:bg-slate-950/50 dark:text-white"></div>
+                <div class="flex flex-col-reverse items-stretch gap-3 pt-4 sm:flex-row sm:items-center"><button type="button" class="flex-1 rounded-xl bg-brand-600 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-lg shadow-brand-600/25">Save Changes <span class="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[9px]">Proposed</span></button><button type="button" class="rounded-xl border border-gray-200 px-5 py-3 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Cancel</button></div>
+              </form>
+            </section>
+            <p class="mt-3 text-[11px] text-gray-500 dark:text-gray-400">Price editing and effective-date editing are not in the reference; this variant is proposed and right-gated.</p>
+          </article>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

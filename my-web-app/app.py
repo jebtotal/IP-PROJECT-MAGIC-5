@@ -3,7 +3,8 @@
 import os
 import secrets
 import smtplib
-from datetime import date
+import hmac
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
 from collections.abc import Mapping
@@ -28,6 +29,7 @@ if not url or not key:
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 reset_token_serializer = URLSafeTimedSerializer(app.secret_key)
+MANILA_TIMEZONE = timezone(timedelta(hours=8))
 RESET_TOKEN_MAX_AGE = 3600
 RIGHTS_MODULES = (
     "Customer",
@@ -157,6 +159,35 @@ def get_admin_client():
     return create_client(url, service_role_key)
 
 
+@app.context_processor
+def inject_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_urlsafe(32)
+    return {"csrf_token": session["csrf_token"]}
+
+
+@app.before_request
+def validate_api_csrf_token():
+    protected_paths = (
+        request.path.startswith("/api/records/")
+        or request.path.startswith("/api/products/")
+        or request.path.startswith("/api/users")
+        or request.path in {"/api/logout", "/logout"}
+    )
+    if request.method not in {"POST", "PATCH", "DELETE"} or not protected_paths:
+        return None
+
+    expected = session.get("csrf_token")
+    supplied = request.headers.get("X-CSRF-Token") or request.form.get("csrf_token")
+    if (
+        not isinstance(expected, str)
+        or not isinstance(supplied, str)
+        or not hmac.compare_digest(expected, supplied)
+    ):
+        return jsonify(error="This request could not be verified. Reload the page and try again."), 400
+    return None
+
+
 def send_password_reset_email(email, reset_url):
     server = os.getenv("MAIL_SERVER")
     username = os.getenv("MAIL_USERNAME")
@@ -210,7 +241,7 @@ def get_current_profile(client):
         return None
     response = (
         client.table("profiles")
-        .select("id, email, full_name, status, role, created_at")
+        .select("id, email, full_name, status, role, blocked, is_deleted, stamp, created_at")
         .eq("id", user.id)
         .single()
         .execute()
@@ -218,12 +249,42 @@ def get_current_profile(client):
     return response.data
 
 
+def profile_is_active(profile):
+    return (
+        profile is not None
+        and profile.get("status") not in {"blocked", "rejected", "pending"}
+        and profile.get("blocked") is not True
+        and profile.get("is_deleted") is not True
+    )
+
+
+def make_stamp(action, actor):
+    actor_name = str(actor.get("email") or actor.get("id") or "system")[:24]
+    timestamp = datetime.now(MANILA_TIMEZONE).strftime("%Y-%m-%d %I:%M %p")
+    return f"{action} {actor_name} {timestamp}"[:60]
+
+
+def display_stamp(stamp):
+    if not isinstance(stamp, str):
+        return stamp
+    parts = stamp.split(" ", 1)
+    action_labels = {
+        "ADD": "CREATED",
+        "EDIT": "EDITED",
+        "DELETE": "DELETED",
+        "RESTORE": "RESTORED",
+    }
+    if parts[0] in action_labels:
+        return f"{action_labels[parts[0]]} {parts[1]}" if len(parts) == 2 else action_labels[parts[0]]
+    return stamp
+
+
 def get_management_profile():
     client = get_authenticated_client()
     if client is None:
         return None, None
     profile = get_current_profile(client)
-    if profile is None or profile.get("role") not in {"admin", "superadmin"}:
+    if not profile_is_active(profile) or profile.get("role") not in {"admin", "superadmin"}:
         return client, None
     return client, profile
 
@@ -256,15 +317,37 @@ def validate_permissions(value):
     return permissions
 
 
-def write_audit_log(admin_client, actor_id, target_user_id, old_rights, new_rights):
+def write_audit_log(
+    admin_client,
+    actor_id,
+    target_user_id,
+    old_rights,
+    new_rights,
+    event_type="user_permission.EDIT",
+):
     admin_client.table("audit_log").insert(
         {
-            "table_name": "user_permission",
-            "action": "EDIT",
-            "record_key": str(target_user_id),
-            "old_values": {"rights": sorted(old_rights)},
-            "new_values": {"rights": sorted(new_rights)},
-            "action_by": str(actor_id),
+            "actor_id": str(actor_id),
+            "event_type": event_type,
+            "old_values": {
+                "user_id": str(target_user_id),
+                "rights": sorted(old_rights),
+            },
+            "new_values": {
+                "user_id": str(target_user_id),
+                "rights": sorted(new_rights),
+            },
+        }
+    ).execute()
+
+
+def write_profile_audit_log(admin_client, actor_id, target_user_id, event_type, old_values, new_values):
+    admin_client.table("audit_log").insert(
+        {
+            "actor_id": str(actor_id),
+            "event_type": event_type,
+            "old_values": old_values,
+            "new_values": new_values,
         }
     ).execute()
 
@@ -356,6 +439,33 @@ def permissions_to_rights(catalog, permissions):
     return selected
 
 
+def legacy_right_catalog():
+    module_codes = {
+        "Customer": "customers",
+        "Product": "products",
+        "Human Resources": "hr",
+        "Sales": "sales",
+        "Reports": "reports",
+    }
+    return [
+        {
+            "right_code": f"{module_code}.{'add' if action == 'create' else action}",
+            "module_code": module_code,
+            "resource_code": module_code,
+            "action": "add" if action == "create" else action,
+        }
+        for module, module_code in module_codes.items()
+        for action in RIGHTS_ACTIONS
+    ]
+
+
+def is_missing_rights_table(error):
+    return error.code == "PGRST205" and any(
+        f"public.{table}" in str(error)
+        for table in ("right_catalog", "user_permission")
+    )
+
+
 def has_permission(permissions, module, action):
     return (
         module in RIGHTS_MODULES
@@ -393,6 +503,9 @@ def index():
     if profile is None:
         session.clear()
         return redirect(url_for("login"))
+    if not profile_is_active(profile):
+        session.clear()
+        return redirect(url_for("login"))
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
     try:
@@ -418,7 +531,7 @@ def api_check_module_permission(module, action):
     if client is None:
         return jsonify(error="You must be logged in."), 401
     profile = get_current_profile(client)
-    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
+    if not profile_is_active(profile):
         return jsonify(error="Profile not found."), 403
     module_name = next(
         (name for name, slug in MODULE_SLUGS.items() if slug == module),
@@ -449,7 +562,7 @@ def module_workspace():
     if profile is None:
         session.clear()
         return redirect(url_for("login"))
-    if profile.get("status") in {"blocked", "rejected", "pending"}:
+    if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
     if must_set_password(client.auth.get_user().user):
@@ -518,7 +631,7 @@ def get_record_access(module_slug, action):
     if client is None:
         return None, None, None, (jsonify(error="You must be logged in."), 401)
     profile = get_current_profile(client)
-    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
+    if not profile_is_active(profile):
         return None, None, None, (jsonify(error="This account is not active."), 403)
     config = RECORD_MODULES.get(module_slug)
     if config is None:
@@ -578,6 +691,19 @@ def record_form_values(config, payload, editing=False):
     return values, None
 
 
+def record_response_record(row, config, is_admin):
+    record = {
+        field["name"]: row.get(field["column"])
+        for field in config["fields"]
+    }
+    if is_admin:
+        record.update(
+            isDeleted=row.get("is_deleted") is True,
+            stamp=display_stamp(row.get("stamp")),
+        )
+    return record
+
+
 PRICE_HISTORY_RIGHTS = {
     "create": "products.priceHistory.add",
     "edit": "products.priceHistory.edit",
@@ -593,7 +719,7 @@ def get_price_history_access(product_code, action):
             401,
         )
     profile = get_current_profile(client)
-    if profile is None or profile.get("status") in {"blocked", "rejected", "pending"}:
+    if not profile_is_active(profile):
         return None, None, None, (
             jsonify(error="This account is not active."),
             403,
@@ -708,7 +834,7 @@ def price_history_response_record(row, is_admin):
     if is_admin:
         record.update(
             isDeleted=row.get("is_deleted") is True,
-            stamp=row.get("stamp"),
+            stamp=display_stamp(row.get("stamp")),
         )
     return record
 
@@ -982,20 +1108,25 @@ def api_list_records(module_slug):
             row for row in rows
             if any(search in str(row.get(column) or "").casefold() for column in business_columns)
         ]
-    records = []
-    for row in rows:
-        record = {
-            field["name"]: row.get(field["column"])
-            for field in config["fields"]
-        }
-        if module_slug == "products":
-            record["currentPrice"] = current_prices.get(row["prodcode"])
-        if is_admin:
-            record.update(
-                isDeleted=row.get("is_deleted") is True,
-                stamp=row.get("stamp"),
+    records = [
+        record_response_record(row, config, is_admin)
+        for row in rows
+    ]
+    if module_slug == "products":
+        try:
+            prices = (
+                client.table("v_product_current_price")
+                .select("prodcode, unitprice")
+                .execute()
             )
-        records.append(record)
+            price_map = {
+                row["prodcode"]: row["unitprice"]
+                for row in (prices.data or [])
+            }
+        except (APIError, httpx.HTTPError, RuntimeError):
+            price_map = {}
+        for record in records:
+            record["currentPrice"] = price_map.get(record.get("prodCode"))
     try:
         permissions = get_permissions_for_user(client, profile)
     except (APIError, httpx.HTTPError):
@@ -1024,7 +1155,14 @@ def api_create_record(module_slug):
         response = client.table(config["table"]).insert(values).execute()
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
-    return jsonify(message=f"{config['singular']} added.", record=response.data[0] if response.data else None), 201
+    return jsonify(
+        message=f"{config['singular']} added.",
+        record=record_response_record(
+            response.data[0],
+            config,
+            profile["role"] in {"admin", "superadmin"},
+        ) if response.data else None,
+    ), 201
 
 
 @app.patch("/api/records/<module_slug>/<record_id>")
@@ -1056,7 +1194,14 @@ def api_edit_record(module_slug, record_id):
         )
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
-    return jsonify(message=f"{config['singular']} updated.", record=response.data[0] if response.data else None)
+    return jsonify(
+        message=f"{config['singular']} updated.",
+        record=record_response_record(
+            response.data[0],
+            config,
+            profile["role"] in {"admin", "superadmin"},
+        ) if response.data else None,
+    )
 
 
 @app.patch("/api/records/<module_slug>/<record_id>/delete")
@@ -1065,6 +1210,36 @@ def api_delete_record(module_slug, record_id):
     if error:
         return error
     try:
+        if module_slug == "customers":
+            sales_check = client.rpc(
+                "hope_customer_has_active_sales",
+                {"p_custno": record_id},
+            ).execute()
+            if sales_check.data is True:
+                return jsonify(
+                    error="This customer cannot be deleted while active sales are linked."
+                ), 409
+        if module_slug == "products":
+            active_prices = (
+                client.table("pricehist_active")
+                .select("prodcode")
+                .eq("prodcode", record_id)
+                .execute()
+            )
+            if active_prices.data:
+                return jsonify(
+                    error="This product cannot be deleted while active prices are linked."
+                ), 409
+            active_sales = (
+                client.table("salesdetail_active")
+                .select("prodcode")
+                .eq("prodcode", record_id)
+                .execute()
+            )
+            if active_sales.data:
+                return jsonify(
+                    error="This product cannot be deleted while active sale lines are linked."
+                ), 409
         response = (
             client.table(config["table"])
             .update({"is_deleted": True})
@@ -1072,7 +1247,17 @@ def api_delete_record(module_slug, record_id):
             .eq("is_deleted", False)
             .execute()
         )
-    except (APIError, httpx.HTTPError, RuntimeError) as error:
+    except APIError as error:
+        if (
+            module_slug == "customers"
+            and error.code in {"P0001", "23514"}
+            and "Cannot delete customer" in str(error)
+        ):
+            return jsonify(
+                error="This customer cannot be deleted while active sales are linked."
+            ), 409
+        return record_error_response(error, config)
+    except (httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
     if not response.data:
         return jsonify(error=f"{config['singular']} not found or already inactive."), 404
@@ -1109,17 +1294,94 @@ def api_users():
     if profile is None:
         return jsonify(error="Administrator access is required."), 403
 
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    columns = "id, email, full_name, status, role, blocked, is_deleted, stamp, created_at"
     try:
-        query = get_admin_client().table("profiles").select(
-            "id, email, full_name, status, role, created_at"
+        admin_client = get_admin_client()
+        active_query = admin_client.table("profiles_active").select(columns)
+        inactive_query = (
+            admin_client.table("profiles")
+            .select(columns)
+            .eq("is_deleted", True)
         )
-        query = query.in_("role", ["admin", "user"])
-        response = query.order("created_at", desc=True).execute()
-    except (RuntimeError, httpx.HTTPError):
+        if profile["role"] == "admin":
+            active_query = active_query.in_("role", ["admin", "user"])
+            inactive_query = inactive_query.in_("role", ["admin", "user"])
+        active_rows = active_query.order("created_at", desc=True).execute().data or []
+        inactive_rows = inactive_query.order("created_at", desc=True).execute().data or []
+    except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User list could not be loaded")
         return jsonify(error="Users could not be loaded. Please try again."), 502
 
-    return jsonify(users=response.data)
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    if requested_status == "active":
+        rows = active_rows
+    elif requested_status == "inactive":
+        rows = inactive_rows
+    else:
+        rows = active_rows + inactive_rows
+
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if search in str(row.get("full_name") or "").casefold()
+            or search in str(row.get("email") or "").casefold()
+            or search in str(row.get("role") or "").casefold()
+        ]
+
+    active_superadmins = [
+        row for row in active_rows
+        if row.get("role") == "superadmin"
+        and not row.get("blocked")
+        and row.get("status") == "approved"
+    ]
+    undeleted_superadmins = [
+        row for row in active_rows
+        if row.get("role") == "superadmin"
+    ]
+    users = []
+    for row in rows:
+        user = dict(row)
+        user["status"] = (
+            "blocked"
+            if user.get("blocked") or user.get("status") == "blocked"
+            else user.get("status")
+        )
+        user["isLastSuperadmin"] = (
+            user.get("role") == "superadmin"
+            and not user.get("is_deleted")
+            and user.get("status") == "approved"
+            and len(active_superadmins) == 1
+        )
+        user["isOnlySuperadmin"] = (
+            user.get("role") == "superadmin"
+            and not user.get("is_deleted")
+            and len(undeleted_superadmins) == 1
+        )
+        user["isDeleted"] = user.get("is_deleted") is True
+        user["stamp"] = display_stamp(user.get("stamp"))
+        users.append(user)
+    return jsonify(users=users, counts=counts, is_admin=True)
+
+
+def get_managed_user(admin_client, profile, user_id, include_deleted=False):
+    query = (
+        admin_client.table("profiles")
+        .select("id, email, full_name, status, role, blocked, is_deleted, stamp")
+        .eq("id", user_id)
+    )
+    if profile["role"] == "admin":
+        query = query.eq("role", "user")
+    if not include_deleted:
+        query = query.eq("is_deleted", False)
+    return query.maybe_single().execute().data
 
 
 @app.post("/api/users")
@@ -1162,14 +1424,40 @@ def api_add_user():
         if response.user is None:
             return jsonify(error="User could not be created."), 502
         profile_response = admin_client.table("profiles").update(
-            {"full_name": full_name, "role": "user", "status": "approved"}
+            {
+                "full_name": full_name,
+                "role": "user",
+                "status": "approved",
+                "blocked": False,
+                "is_deleted": False,
+                "stamp": make_stamp("CREATED", profile),
+            }
         ).eq("id", response.user.id).execute()
         if not profile_response.data:
             admin_client.auth.admin.delete_user(response.user.id)
             return jsonify(error="User profile could not be created."), 502
-    except (AuthError, httpx.HTTPError):
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            response.user.id,
+            "profile.CREATED",
+            {},
+            {
+                "email": email,
+                "full_name": full_name,
+                "role": "user",
+                "status": "approved",
+            },
+        )
+    except AuthError:
         app.logger.exception("Administrator user creation failed")
         return jsonify(error="User could not be created. Check the email and try again."), 400
+    except APIError:
+        app.logger.exception("Administrator user profile or audit entry could not be saved")
+        return jsonify(error="User setup or audit logging failed. Contact an administrator."), 502
+    except httpx.HTTPError:
+        app.logger.exception("Administrator user creation request failed")
+        return jsonify(error="User could not be created. Please try again."), 502
     except RuntimeError:
         app.logger.exception("Administrator user creation is not configured")
         return jsonify(error="User management is not configured on the server."), 503
@@ -1194,25 +1482,26 @@ def api_edit_user(user_id):
         return jsonify(error="Enter a name between 1 and 120 characters."), 400
 
     try:
-        target = (
-            get_admin_client()
-            .table("profiles")
-            .select("id, role")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        if target.data is None or (
-            profile["role"] == "admin" and target.data["role"] != "user"
-        ) or target.data["role"] == "superadmin":
+        admin_client = get_admin_client()
+        target = get_managed_user(admin_client, profile, user_id)
+        if target is None:
             return jsonify(error="User not found."), 404
-        update_query = get_admin_client().table("profiles").update(
-            {"full_name": full_name}
-        ).eq("id", user_id)
+        update_query = admin_client.table("profiles").update(
+            {"full_name": full_name, "stamp": make_stamp("EDITED", profile)}
+        ).eq("id", user_id).eq("is_deleted", False)
         if profile["role"] == "admin":
             update_query = update_query.eq("role", "user")
-        update_query.execute()
-    except (RuntimeError, httpx.HTTPError):
+        if not update_query.execute().data:
+            return jsonify(error="User not found."), 404
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            "profile.EDITED",
+            {"full_name": target.get("full_name")},
+            {"full_name": full_name},
+        )
+    except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("Administrator user edit failed")
         return jsonify(error="User could not be updated. Please try again."), 502
 
@@ -1228,35 +1517,63 @@ def api_update_user_status(user_id):
         return jsonify(error="Administrator access is required."), 403
 
     payload = get_user_payload()
-    status = payload.get("status") if payload else None
-    if status not in {"approved", "blocked"}:
+    requested_status = payload.get("status") if payload else None
+    if requested_status not in {"approved", "blocked"}:
         return jsonify(error="Status must be approved or blocked."), 400
 
     try:
-        target = (
-            get_admin_client()
-            .table("profiles")
-            .select("id, role, status")
-            .eq("id", user_id)
-            .maybe_single()
-            .execute()
-        )
-        if target.data is None or (
-            profile["role"] == "admin" and target.data["role"] != "user"
-        ) or target.data["role"] == "superadmin":
+        admin_client = get_admin_client()
+        target = get_managed_user(admin_client, profile, user_id)
+        if target is None:
             return jsonify(error="User not found."), 404
         if (
-            profile["role"] == "admin"
-            and target.data["status"] == "pending"
-            and status == "approved"
+            profile["role"] != "superadmin"
+            and target["status"] == "pending"
+            and requested_status == "approved"
         ):
             return jsonify(error="Only a superadmin can approve pending users."), 403
-        update_query = get_admin_client().table("profiles").update(
-            {"status": status}
-        ).eq("id", user_id)
+
+        updates = {"stamp": make_stamp("EDITED", profile)}
+        if requested_status == "blocked":
+            updates["blocked"] = True
+            event_type = "profile.BLOCKED"
+        else:
+            updates["blocked"] = False
+            if target["status"] in {"pending", "blocked", "rejected"}:
+                updates["status"] = "approved"
+            event_type = (
+                "profile.APPROVED"
+                if target["status"] == "pending"
+                else "profile.UNBLOCKED"
+            )
+        update_query = (
+            admin_client.table("profiles")
+            .update(updates)
+            .eq("id", user_id)
+            .eq("is_deleted", False)
+        )
         if profile["role"] == "admin":
             update_query = update_query.eq("role", "user")
-        update_query.execute()
+        if not update_query.execute().data:
+            return jsonify(error="User not found."), 404
+        old_values = {"status": target["status"], "blocked": target["blocked"]}
+        new_values = {
+            "status": updates.get("status", target["status"]),
+            "blocked": updates["blocked"],
+        }
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            event_type,
+            old_values,
+            new_values,
+        )
+    except APIError as error:
+        if error.code == "23514" and "last superadmin" in str(error).casefold():
+            return jsonify(error="The last active Superadmin cannot be blocked or removed."), 409
+        app.logger.exception("Administrator user status update failed")
+        return jsonify(error="User status could not be updated. Please try again."), 502
     except (RuntimeError, httpx.HTTPError):
         app.logger.exception("Administrator user status update failed")
         return jsonify(error="User status could not be updated. Please try again."), 502
@@ -1280,20 +1597,31 @@ def api_update_user_role(user_id):
         return jsonify(error="Role must be admin or user."), 400
 
     try:
-        target = (
-            get_admin_client()
-            .table("profiles")
-            .select("id, role")
+        admin_client = get_admin_client()
+        target = get_managed_user(admin_client, profile, user_id)
+        if target is None:
+            return jsonify(error="User not found."), 404
+        if target["role"] == "superadmin":
+            return jsonify(error="Superadmin accounts cannot be demoted."), 403
+        updated = (
+            admin_client.table("profiles")
+            .update({"role": role, "stamp": make_stamp("EDITED", profile)})
             .eq("id", user_id)
-            .maybe_single()
+            .eq("is_deleted", False)
+            .neq("role", "superadmin")
             .execute()
         )
-        if target.data is None or target.data["role"] == "superadmin":
-            return jsonify(error="Superadmin accounts cannot be changed here."), 403
-        get_admin_client().table("profiles").update(
-            {"role": role}
-        ).eq("id", user_id).neq("role", "superadmin").execute()
-    except (RuntimeError, httpx.HTTPError):
+        if not updated.data:
+            return jsonify(error="User not found."), 404
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            "profile.ROLE_EDITED",
+            {"role": target["role"]},
+            {"role": role},
+        )
+    except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("Superadmin role update failed")
         return jsonify(error="User role could not be updated. Please try again."), 502
 
@@ -1311,36 +1639,96 @@ def api_remove_user(user_id):
         return jsonify(error="Superadmin access is required."), 403
 
     try:
-        target = (
-            get_admin_client()
-            .table("profiles")
-            .select("id, role")
+        admin_client = get_admin_client()
+        target = get_managed_user(admin_client, profile, user_id)
+        if target is None:
+            return jsonify(error="User not found."), 404
+        updated = (
+            admin_client.table("profiles")
+            .update(
+                {
+                    "is_deleted": True,
+                    "stamp": make_stamp("DELETED", profile),
+                }
+            )
             .eq("id", user_id)
-            .maybe_single()
+            .eq("is_deleted", False)
             .execute()
         )
-        if target.data is None:
-            return jsonify(error="User not found."), 404
-        if target.data["role"] == "superadmin":
-            return jsonify(error="Superadmin accounts cannot be removed."), 403
-        get_admin_client().auth.admin.delete_user(user_id)
-    except (RuntimeError, AuthError, httpx.HTTPError):
+        if not updated.data:
+            return jsonify(error="User not found or already inactive."), 404
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            "profile.DELETED",
+            {"is_deleted": False},
+            {"is_deleted": True},
+        )
+    except APIError as error:
+        if error.code == "23514" and "last superadmin" in str(error).casefold():
+            return jsonify(error="The last Superadmin cannot be removed or disabled."), 409
+        app.logger.exception("Superadmin user removal failed")
+        return jsonify(error="User could not be removed. Please try again."), 502
+    except (RuntimeError, httpx.HTTPError):
         app.logger.exception("Superadmin user removal failed")
         return jsonify(error="User could not be removed. Please try again."), 502
 
-    return jsonify(message="User removed.")
+    return jsonify(message="User moved to Inactive.")
+
+
+@app.patch("/api/users/<user_id>/restore")
+def api_restore_user(user_id):
+    client, profile = get_management_profile()
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None:
+        return jsonify(error="Administrator access is required."), 403
+
+    try:
+        admin_client = get_admin_client()
+        target = get_managed_user(admin_client, profile, user_id, include_deleted=True)
+        if target is None or not target["is_deleted"]:
+            return jsonify(error="Inactive user not found."), 404
+        updated = (
+            admin_client.table("profiles")
+            .update(
+                {
+                    "is_deleted": False,
+                    "stamp": make_stamp("RESTORED", profile),
+                }
+            )
+            .eq("id", user_id)
+            .eq("is_deleted", True)
+            .execute()
+        )
+        if not updated.data:
+            return jsonify(error="Inactive user not found."), 404
+        write_profile_audit_log(
+            admin_client,
+            profile["id"],
+            user_id,
+            "profile.RESTORED",
+            {"is_deleted": True},
+            {"is_deleted": False},
+        )
+    except (RuntimeError, APIError, httpx.HTTPError):
+        app.logger.exception("Administrator user restore failed")
+        return jsonify(error="User could not be restored. Please try again."), 502
+
+    return jsonify(message="User restored.")
 
 
 def get_rights_target(profile, user_id):
     target = (
         get_admin_client()
         .table("profiles")
-        .select("id, role")
+        .select("id, role, is_deleted")
         .eq("id", user_id)
         .maybe_single()
         .execute()
     )
-    if target.data is None:
+    if target.data is None or target.data["is_deleted"]:
         return None
     if target.data["role"] == "superadmin":
         return None
@@ -1361,16 +1749,38 @@ def api_get_user_permissions(user_id):
         if get_rights_target(profile, user_id) is None:
             return jsonify(error="User not found."), 404
         admin_client = get_admin_client()
-        catalog_response = admin_client.table("right_catalog").select(
-            "right_code, module_code, resource_code, action"
-        ).execute()
-        assignment_response = (
-            admin_client.table("user_permission")
-            .select("right_code")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .execute()
-        )
+        try:
+            catalog_response = admin_client.table("right_catalog").select(
+                "right_code, module_code, resource_code, action"
+            ).order("module_code").order("right_code").execute()
+            assignment_response = (
+                admin_client.table("user_permission")
+                .select("right_code")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                .execute()
+            )
+        except APIError as error:
+            if not is_missing_rights_table(error):
+                raise
+            catalog = legacy_right_catalog()
+            legacy = (
+                admin_client.table("user_permissions")
+                .select("permissions")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            )
+            legacy_data = legacy.data if legacy is not None else None
+            legacy_permissions = (
+                validate_permissions(legacy_data["permissions"]) if legacy_data else None
+            )
+            selected = (
+                permissions_to_rights(catalog, legacy_permissions)
+                if legacy_permissions
+                else []
+            )
+            return jsonify(catalog=catalog, selected=selected)
     except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User permissions could not be loaded")
         return jsonify(error="Rights catalogue needs database setup or could not be loaded."), 503
@@ -1414,38 +1824,82 @@ def api_update_user_permissions(user_id):
         if target is None:
             return jsonify(error="User not found."), 404
         admin_client = get_admin_client()
-        catalog_response = admin_client.table("right_catalog").select(
-            "right_code, module_code, resource_code, action"
-        ).execute()
-        catalog = catalog_response.data or []
+        legacy_mode = False
+        try:
+            catalog_response = admin_client.table("right_catalog").select(
+                "right_code, module_code, resource_code, action"
+            ).order("module_code").order("right_code").execute()
+            catalog = catalog_response.data or []
+            current = admin_client.table("user_permission").select(
+                "right_code, is_deleted, stamp"
+            ).eq("user_id", user_id).execute()
+        except APIError as error:
+            if not is_missing_rights_table(error):
+                raise
+            catalog = legacy_right_catalog()
+            legacy = (
+                admin_client.table("user_permissions")
+                .select("permissions")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            )
+            legacy_data = legacy.data if legacy is not None else None
+            legacy_permissions = (
+                validate_permissions(legacy_data["permissions"]) if legacy_data else None
+            )
+            active_rights = (
+                set(permissions_to_rights(catalog, legacy_permissions))
+                if legacy_permissions
+                else set()
+            )
+            legacy_mode = True
         known_rights = {right["right_code"] for right in catalog}
         if not set(selected).issubset(known_rights):
             return jsonify(error="Rights include entries not in the database catalogue."), 400
-        current = admin_client.table("user_permission").select(
-            "right_code, is_deleted"
-        ).eq("user_id", user_id).execute()
-        active_rights = {
-            row["right_code"] for row in current.data or [] if not row["is_deleted"]
-        }
-        to_soft_delete = active_rights.difference(selected)
-        if to_soft_delete:
-            admin_client.table("user_permission").update(
-                {"is_deleted": True}
-            ).eq("user_id", user_id).in_("right_code", list(to_soft_delete)).execute()
-        if selected:
-            admin_client.table("user_permission").upsert(
-                [
-                    {"user_id": user_id, "right_code": right_code, "is_deleted": False}
-                    for right_code in selected
-                ]
-            ).execute()
-        # Keep the original JSON contract synchronized for deployments that still read it.
         permissions = rights_to_permissions(
             catalog, [{"right_code": right_code} for right_code in selected]
         )
-        admin_client.table("user_permissions").upsert(
-            {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
-        ).execute()
+        if legacy_mode:
+            admin_client.table("user_permissions").upsert(
+                {"user_id": user_id, "permissions": permissions}
+            ).execute()
+        else:
+            current_rows = current.data or []
+            current_by_code = {row["right_code"]: row for row in current_rows}
+            active_rights = {
+                right_code
+                for right_code, row in current_by_code.items()
+                if not row["is_deleted"]
+            }
+            to_soft_delete = active_rights.difference(selected)
+            if to_soft_delete:
+                admin_client.table("user_permission").update(
+                    {
+                        "is_deleted": True,
+                        "stamp": make_stamp("DELETED", profile),
+                    }
+                ).eq("user_id", user_id).in_("right_code", list(to_soft_delete)).execute()
+            to_restore_or_create = set(selected).difference(active_rights)
+            if to_restore_or_create:
+                admin_client.table("user_permission").upsert(
+                    [
+                        {
+                            "user_id": user_id,
+                            "right_code": right_code,
+                            "is_deleted": False,
+                            "stamp": make_stamp(
+                                "RESTORED" if right_code in current_by_code else "CREATED",
+                                profile,
+                            ),
+                        }
+                        for right_code in to_restore_or_create
+                    ]
+                ).execute()
+            # Keep the original JSON contract synchronized for deployments that still read it.
+            admin_client.table("user_permissions").upsert(
+                {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
+            ).execute()
         write_audit_log(admin_client, profile["id"], user_id, active_rights, selected)
     except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User permissions update failed")
@@ -1564,7 +2018,11 @@ def api_login():
         if profile is None:
             client.auth.sign_out()
             return jsonify(error="Your account profile is unavailable."), 403
-        if profile["status"] in {"blocked", "rejected"}:
+        if (
+            profile["status"] in {"blocked", "rejected"}
+            or profile.get("blocked") is True
+            or profile.get("is_deleted") is True
+        ):
             client.auth.sign_out()
             return jsonify(error="This account is blocked. Contact an administrator."), 403
         if profile["status"] == "pending":
@@ -1612,7 +2070,7 @@ def set_password():
     if client is None:
         return redirect(url_for("login"))
     profile = get_current_profile(client)
-    if profile is None:
+    if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
     if not must_set_password(client.auth.get_user().user):
@@ -1625,6 +2083,10 @@ def api_set_password():
     client = get_authenticated_client()
     if client is None:
         return jsonify(error="You must be logged in."), 401
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        session.clear()
+        return jsonify(error="This account is not active."), 403
 
     payload = request.get_json(silent=True) if request.is_json else request.form
     password = payload.get("password") if isinstance(payload, Mapping) else None

@@ -17,10 +17,10 @@ let editingRecord = null;
 let searchTimer;
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {"Content-Type": "application/json", ...options.headers},
-    ...options,
-  });
+  const headers = {"Content-Type": "application/json", ...options.headers};
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const response = await fetch(url, {...options, headers});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Request could not be completed.");
   return result;
