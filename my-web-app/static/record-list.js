@@ -15,7 +15,8 @@ const recordFilters = document.querySelector("#record-filters");
 let currentStatus = "active";
 let currentActions = {create: false, edit: false, delete: false};
 let editingRecord = null;
-let searchTimer;
+let records = [];
+let loadedFilterKey = null;
 
 async function request(url, options = {}) {
   const headers = {
@@ -212,26 +213,46 @@ function updateCounts(counts) {
   }
 }
 
-async function loadRecords() {
-  recordMessage.textContent = "";
+function recordFilterKey() {
   const params = new URLSearchParams({
     status: config.isAdmin ? currentStatus : "active",
-    search: searchInput.value.trim(),
   });
   recordFilters?.querySelectorAll("[data-record-filter]").forEach((filter) => {
     params.set(filter.dataset.recordFilter, filter.value);
   });
+  return params.toString();
+}
+
+function filterRecords() {
+  const search = searchInput.value.trim().toLocaleLowerCase();
+  if (!search) return records;
+  return records.filter((record) =>
+    config.fields.some((field) =>
+      String(record[field.name] || "").toLocaleLowerCase().includes(search)
+    )
+  );
+}
+
+async function loadRecords() {
+  recordMessage.textContent = "";
+  const requestedFilterKey = recordFilterKey();
   try {
-    const result = await request(`/api/records/${config.module}?${params}`);
+    const result = await request(`/api/records/${config.module}?${requestedFilterKey}`);
+    if (requestedFilterKey !== recordFilterKey()) return;
     currentActions = result.actions;
     recordAddButton.hidden = !currentActions.create;
-    renderRecords(result.records);
+    records = result.records;
+    loadedFilterKey = requestedFilterKey;
+    renderRecords(filterRecords());
     updateCounts(result.counts);
   } catch (error) {
+    if (requestedFilterKey !== recordFilterKey()) return;
     recordMessage.textContent = error instanceof Error
       ? error.message
       : `${config.title} could not be loaded.`;
     recordTableBody.replaceChildren();
+    records = [];
+    loadedFilterKey = requestedFilterKey;
   }
 }
 
@@ -359,8 +380,9 @@ document.querySelectorAll('[data-dialog-close="record-dialog"]').forEach((button
 });
 recordForm.addEventListener("submit", saveRecord);
 searchInput.addEventListener("input", () => {
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(loadRecords, 180);
+  if (loadedFilterKey === recordFilterKey()) {
+    renderRecords(filterRecords());
+  }
 });
 recordFilters?.addEventListener("change", loadRecords);
 recordTabs?.addEventListener("click", (event) => {

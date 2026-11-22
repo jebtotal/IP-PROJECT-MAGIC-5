@@ -130,6 +130,58 @@ class SalesStatusRouteTests(unittest.TestCase):
             session["csrf_token"] = "test-token"
         return client.patch(path, headers={"X-CSRF-Token": "test-token"})
 
+    def test_sales_list_returns_form_choices_with_initial_list_response(self):
+        class Query:
+            def select(self, _columns):
+                return self
+
+            def order(self, _column, **_kwargs):
+                return self
+
+            def eq(self, _column, _value):
+                return self
+
+            def execute(self):
+                return SimpleNamespace(data=[])
+
+        class SalesListClient:
+            def rpc(self, name):
+                if name == "hope_sales_balance_data":
+                    data = {"transactions": [], "customers": []}
+                elif name == "hope_sales_form_options":
+                    data = {
+                        "customers": [{"customerNo": "CU001", "customerName": "Customer"}],
+                        "salespeople": [{"employeeNo": "EM001", "fullName": "Employee"}],
+                        "saleDetailActions": {"view": True},
+                    }
+                else:
+                    raise AssertionError(f"Unexpected RPC: {name}")
+                return SimpleNamespace(execute=lambda: SimpleNamespace(data=data))
+
+            def table(self, _name):
+                return Query()
+
+        with patch.object(
+            web_app,
+            "get_record_access",
+            return_value=(
+                SalesListClient(),
+                {"role": "admin"},
+                web_app.RECORD_MODULES["sales"],
+                {"create": True, "delete": True},
+                None,
+            ),
+        ):
+            response = web_app.app.test_client().get("/api/sales")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json["customers"], [
+            {"customerNo": "CU001", "customerName": "Customer"},
+        ])
+        self.assertEqual(response.json["salespeople"], [
+            {"employeeNo": "EM001", "fullName": "Employee"},
+        ])
+
     def test_delete_uses_permission_checked_soft_delete_rpc(self):
         rpc_client = self.RpcClient()
         with patch.object(

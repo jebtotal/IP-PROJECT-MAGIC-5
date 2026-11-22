@@ -2607,6 +2607,11 @@ def api_list_sales():
     if not isinstance(options, Mapping):
         app.logger.error("Sales form options RPC returned an invalid response")
         return jsonify(error="Sales list choices could not be loaded."), 502
+    customers = options.get("customers", [])
+    salespeople = options.get("salespeople", [])
+    if not isinstance(customers, list) or not isinstance(salespeople, list):
+        app.logger.error("Sales form options RPC returned invalid customer or salesperson lists")
+        return jsonify(error="Sales list choices could not be loaded."), 502
     balances = balance_response.data
     if (
         not isinstance(balances, Mapping)
@@ -2622,11 +2627,11 @@ def api_list_sales():
     }
     customer_names = {
         row["customerNo"]: row.get("customerName")
-        for row in options.get("customers", [])
+        for row in customers
     }
     salesperson_names = {
         row["employeeNo"]: row.get("fullName")
-        for row in options.get("salespeople", [])
+        for row in salespeople
     }
     counts = {
         "active": len(active_rows),
@@ -2663,6 +2668,8 @@ def api_list_sales():
     return jsonify(
         records=records,
         customerBalances=balances["customers"],
+        customers=customers,
+        salespeople=salespeople,
         counts=counts if is_admin else None,
         is_admin=is_admin,
         actions={
