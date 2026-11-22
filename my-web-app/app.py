@@ -299,6 +299,52 @@ RECORD_MODULES = {
             },
         ),
     },
+    "sales": {
+        "module_slug": "sales",
+        "name": "Sales",
+        "singular": "Sale",
+        "permission": "Sales",
+        "rights_module": "sales",
+        "rights_resource": "sales",
+        "rights_view_resource": "sales",
+        "table": "sales",
+        "active_view": "sales_active",
+        "key": "transno",
+        "key_field": "transNo",
+        "display_field": "transNo",
+        "allowed_actions": ("view", "create"),
+        "fields": (
+            {
+                "name": "transNo",
+                "column": "transno",
+                "label": "Transaction No",
+                "maxlength": 8,
+                "required": True,
+            },
+            {
+                "name": "salesDate",
+                "column": "salesdate",
+                "label": "Sale Date",
+                "maxlength": 10,
+                "required": True,
+                "type": "date",
+            },
+            {
+                "name": "custNo",
+                "column": "custno",
+                "label": "Customer",
+                "maxlength": 5,
+                "required": True,
+            },
+            {
+                "name": "empNo",
+                "column": "empno",
+                "label": "Salesperson",
+                "maxlength": 5,
+                "required": True,
+            },
+        ),
+    },
 }
 
 
@@ -326,6 +372,7 @@ def validate_api_csrf_token():
         or request.path.startswith("/api/products/")
         or request.path.startswith("/api/hr/")
         or request.path.startswith("/api/users")
+        or request.path.startswith("/api/sales")
         or request.path in {"/api/logout", "/logout"}
     )
     if request.method not in {"POST", "PATCH", "DELETE"} or not protected_paths:
@@ -757,6 +804,15 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
+    if allowed and slug == "sales":
+        return render_template(
+            "sales_list.html",
+            profile=profile,
+            module=module,
+            is_admin=profile["role"] in {"admin", "superadmin"},
+            today=datetime.now(MANILA_TIMEZONE).date().isoformat(),
+            sidebar_modules=module_cards(permissions),
+        )
     record_slug = (
         path_parts[1] if len(path_parts) > 1 else "departments"
     ) if slug == "human-resources" else slug
@@ -1236,6 +1292,33 @@ def get_record_actions(client, profile, config, permissions):
         ) in granted
         for action in RIGHTS_ACTIONS
     }
+
+
+def parse_sale_header(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "salesDate", "customerNo", "employeeNo"
+    }:
+        return None, "Enter a sale date, customer, and salesperson."
+    sale_date = payload.get("salesDate")
+    if not isinstance(sale_date, str):
+        return None, "Enter a valid sale date."
+    try:
+        parsed_date = date.fromisoformat(sale_date)
+    except ValueError:
+        return None, "Enter a valid sale date."
+    if parsed_date.isoformat() != sale_date:
+        return None, "Enter a valid sale date."
+    customer_no = payload.get("customerNo")
+    employee_no = payload.get("employeeNo")
+    if not isinstance(customer_no, str) or not customer_no.strip() or len(customer_no.strip()) > 5:
+        return None, "Choose a valid customer."
+    if not isinstance(employee_no, str) or not employee_no.strip() or len(employee_no.strip()) > 5:
+        return None, "Choose a valid salesperson."
+    return {
+        "salesdate": parsed_date.isoformat(),
+        "custno": customer_no.strip(),
+        "empno": employee_no.strip(),
+    }, None
 
 
 def record_error_response(error, config):
@@ -1909,6 +1992,156 @@ def api_list_records(module_slug):
         is_admin=is_admin,
         actions=response_actions,
     )
+
+
+@app.get("/api/sales/options")
+def api_sales_options():
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc("hope_sales_form_options").execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Sales"})
+    options = response.data
+    if not isinstance(options, Mapping):
+        app.logger.error("Sales form options RPC returned an invalid response")
+        return jsonify(error="Sales form choices could not be loaded."), 502
+    return jsonify(
+        customers=options.get("customers", []),
+        salespeople=options.get("salespeople", []),
+    )
+
+
+@app.get("/api/sales")
+def api_list_sales():
+    client, profile, config, actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    fields = config["fields"]
+    business_columns = [field["column"] for field in fields]
+    admin_columns = ", ".join(business_columns + ["is_deleted", "stamp"])
+    try:
+        active_rows = (
+            client.table("sales_active")
+            .select(", ".join(business_columns))
+            .order("salesdate", desc=True)
+            .execute()
+            .data or []
+        )
+        inactive_rows = []
+        if is_admin:
+            inactive_rows = (
+                client.table("sales")
+                .select(admin_columns)
+                .eq("is_deleted", True)
+                .order("salesdate", desc=True)
+                .execute()
+                .data or []
+            )
+        options_response = client.rpc("hope_sales_form_options").execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    options = options_response.data
+    if not isinstance(options, Mapping):
+        app.logger.error("Sales form options RPC returned an invalid response")
+        return jsonify(error="Sales list choices could not be loaded."), 502
+    customer_names = {
+        row["customerNo"]: row.get("customerName")
+        for row in options.get("customers", [])
+    }
+    salesperson_names = {
+        row["employeeNo"]: row.get("fullName")
+        for row in options.get("salespeople", [])
+    }
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    rows = (
+        active_rows if status_filter == "active"
+        else inactive_rows if status_filter == "inactive"
+        else active_rows + inactive_rows
+    )
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if search in str(row.get("transno") or "").casefold()
+            or search in str(row.get("salesdate") or "").casefold()
+            or search in str(customer_names.get(row.get("custno")) or "").casefold()
+            or search in str(salesperson_names.get(row.get("empno")) or "").casefold()
+            or search in str(row.get("custno") or "").casefold()
+            or search in str(row.get("empno") or "").casefold()
+        ]
+    records = []
+    for row in rows:
+        record = record_response_record(row, config, is_admin)
+        record["customerName"] = customer_names.get(row.get("custno"))
+        record["salespersonName"] = salesperson_names.get(row.get("empno"))
+        records.append(record)
+    return jsonify(
+        records=records,
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            "create": actions["create"],
+            "edit": False,
+            "delete": False,
+        },
+    )
+
+
+@app.post("/api/sales")
+def api_create_sale():
+    client, _profile, _config, _actions, error = get_record_access("sales", "create")
+    if error:
+        return error
+    values, validation_error = parse_sale_header(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_create_sale",
+            {
+                "p_salesdate": values["salesdate"],
+                "p_custno": values["custno"],
+                "p_empno": values["empno"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="Sales Add permission is required."), 403
+        if error.code == "22023":
+            return jsonify(error="Choose an active customer and salesperson."), 400
+        if error.code == "P0001" and "transaction number" in str(error).lower():
+            return jsonify(error="A transaction number could not be allocated. Contact an administrator."), 503
+        return record_error_response(error, {"name": "Sales"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Sales"})
+    data = response.data
+    transaction_no = (
+        data[0].get("transno")
+        if isinstance(data, list) and data and isinstance(data[0], Mapping)
+        else data.get("transno")
+        if isinstance(data, Mapping)
+        else data
+        if isinstance(data, str)
+        else None
+    )
+    if not isinstance(transaction_no, str):
+        app.logger.error("Sale creation RPC returned no transaction number")
+        return jsonify(error="Sale could not be created."), 502
+    return jsonify(
+        message=f"Sale {transaction_no} created.",
+        transactionNo=transaction_no,
+    ), 201
 
 
 @app.post("/api/records/<module_slug>")
