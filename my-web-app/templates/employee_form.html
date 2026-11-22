@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% set page_title = "Employee Form" %}
+{% block title %}Employee Form | PentadERP{% endblock %}
+
+{% block content %}
+{% if form_mode == "add" %}
+  <h3 class="auth-brand">Add Employee Account</h3>
+{% elif form_mode == "edit" %}
+  <h3 class="auth-brand">Edit Employee Account</h3>
+{% endif %}
+
+<main class="max-w-2xl mx-auto p-8 space-y-6">
+  <section class="glass-panel rounded-3xl bg-white/80 dark:bg-slate-900/80 p-8">
+    <form method="POST" action="{{ url_for('employees_form') }}" novalidate>
+      {{ csrf_token() }}
+
+      <div class="field">
+        <label class="field-label" for="firstname">First Name</label>
+        <input type="text" name="firstname" id="firstname" class="field input-with-toggle" placeholder="First Name" required>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="lastname">Last Name</label>
+        <input type="text" name="lastname" id="lastname" class="field" placeholder="Last Name" required>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input type="email" name="email" id="email" class="field" placeholder="employee@pentaderp.com" required>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="department">Department</label>
+        <select name="department" id="department" class="field">
+          <option value="" disabled selected>Select Department</option>
+          <option value="Human Resources">Human Resources</option>
+          <option value="Engineering">Engineering</option>
+          <option value="Sales">Sales</option>
+          <option value="Marketing">Marketing</option>
+          <option value="Finance">Finance</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="role">Role</label>
+        <select name="role" id="role" class="field">
+          <option value="" disabled selected>Select Role</option>
+          <option value="superadmin">Superadmin</option>
+          <option value="admin">Admin</option>
+          <option value="user">User</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="hiredate">Hire Date</label>
+        <input type="date" name="hiredate" id="hiredate" class="field" placeholder="Hire Date">
+      </div>
+
+      {% if can_view_job_history %}
+      <div class="field">
+        <label class="field-label" for="sepdate">Separation Date</label>
+        <input type="date" name="sepdate" id="sepdate" class="field" placeholder="Separation Date">
+        <p class="field-hint">Shown only for employees who left the company. Distinct from "Deleted" status.</p>
+      </div>
+      {% else %}
+      <div class="field">
+        <label class="field-label" for="sepdate">Separation Date</label>
+        <input type="date" name="sepdate" id="sepdate" class="field[disabled]" placeholder="Separation Date" disabled>
+        <p class="field-hint text-gray-400 dark:text-gray-500">Separation date field hidden without View Job History right. Distinct from "Deleted" status.</p>
+      </div>
+      {% endif %}
+
+      {% if can_view_job_history %}
+      <div class="field">
+        <label class="field-label" for="job_history">Job History</label>
+        <textarea name="job_history" id="job_history" rows="3" class="field"></textarea>
+        <p class="field-hint">Job history entries for this employee.</p>
+      </div>
+      {% else %}
+      <div class="field">
+        <label class="field-label" for="job_history">Job History</label>
+        <textarea name="job_history" id="job_history" rows="3" class="field[disabled]" disabled></textarea>
+        <p class="field-hint text-gray-400 dark:text-gray-500">Job history hidden without View Job History right.</p>
+      </div>
+      {% endif %}
+
+      <div class="record-toolbar">
+        {% if profile.role in ("admin", "superadmin") %}
+        <div>
+          <button type="submit" class="btn btn-primary">Save</button>
+          <a class="btn btn-secondary" href="/human-resources/employees">Cancel</a>
+        </div>
+        {% else %}
+        <span class="text-gray-400 dark:text-gray-500">Read-only form</span>
+        {% endif %}
+      </div>
+    </form>
+  </section>
+</main>
+{% endblock %}
