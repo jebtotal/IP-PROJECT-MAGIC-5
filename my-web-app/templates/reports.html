@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% set page_title = "Reports" %}
+{% block title %}Reports | PentadERP{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> REPORTS MODULE</span>
+      <h2>Reports</h2>
+      <p>Read-only business reports. Administrators control access to each report.</p>
+    </div>
+  </section>
+  {% if reports %}
+    <section class="report-grid" aria-label="Available reports">
+      {% for report in reports %}
+        <a class="report-card glass-panel" href="{{ url_for('report_workspace', report_slug=report.slug) }}">
+          <span class="report-card-icon" aria-hidden="true"><i class="fa-solid fa-chart-column"></i></span>
+          <span class="report-card-copy">
+            <strong>{{ report.name }}</strong>
+            <span>{{ report.description }}</span>
+          </span>
+          <i class="fa-solid fa-arrow-right report-card-arrow" aria-hidden="true"></i>
+        </a>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="management-panel glass-panel report-empty">
+      <h3>No reports assigned</h3>
+      <p>Ask an administrator to grant access to one or more reports.</p>
+    </section>
+  {% endif %}
+  <p class="auth-footer"><a href="{{ url_for('index') }}">Back to workspace</a></p>
+{% endblock %}

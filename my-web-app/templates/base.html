@@ -22,9 +22,9 @@
         root.style.setProperty("--sidebar-width", "272px");
       }
     </script>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      tailwind.config = {
+      window.tailwind = window.tailwind || {};
+      window.tailwind.config = {
         darkMode: "class",
         theme: {
           extend: {
@@ -61,6 +61,7 @@
         },
       };
     </script>
+    <script src="https://cdn.tailwindcss.com" async></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -71,7 +72,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     >
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='8') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='9') }}">
     {% block head_scripts %}{% endblock %}
   </head>
   <body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">

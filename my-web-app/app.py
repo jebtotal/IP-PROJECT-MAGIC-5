@@ -31,6 +31,91 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 reset_token_serializer = URLSafeTimedSerializer(app.secret_key)
 MANILA_TIMEZONE = timezone(timedelta(hours=8))
 RESET_TOKEN_MAX_AGE = 3600
+REPORTS = (
+    {
+        "slug": "top-customers",
+        "name": "Top Customers",
+        "description": "Rank customers by sales for a selected date range.",
+        "right_code": "reports.topCustomers.view",
+        "resource_code": "top_customers",
+        "filters": ("dates", "top_n"),
+    },
+    {
+        "slug": "product-master-list",
+        "name": "Product Master List",
+        "description": "Browse active products and their current prices.",
+        "right_code": "reports.productsMaster.view",
+        "resource_code": "products_master",
+        "filters": (),
+    },
+    {
+        "slug": "top-products",
+        "name": "Top Products",
+        "description": "Rank products by quantity sold and sales amount.",
+        "right_code": "reports.topProducts.view",
+        "resource_code": "top_products",
+        "filters": ("dates", "top_n"),
+    },
+    {
+        "slug": "active-employees",
+        "name": "Active Employees",
+        "description": "Employees who have not separated from the company.",
+        "right_code": "reports.activeEmployees.view",
+        "resource_code": "active_employees",
+        "filters": (),
+    },
+    {
+        "slug": "all-employees",
+        "name": "All Employees",
+        "description": "All employees, including those who have separated.",
+        "right_code": "reports.allEmployees.view",
+        "resource_code": "all_employees",
+        "filters": (),
+    },
+    {
+        "slug": "employee-job-history",
+        "name": "Employee Job History",
+        "description": "Review job and salary history for a selected employee.",
+        "right_code": "reports.employeeJobHistory.view",
+        "resource_code": "employee_job_history",
+        "filters": ("employee",),
+    },
+    {
+        "slug": "top-sales",
+        "name": "Top Sales",
+        "description": "Rank individual sales by total for a selected date range.",
+        "right_code": "reports.topSales.view",
+        "resource_code": "top_sales",
+        "filters": ("dates", "top_n"),
+    },
+)
+SALES_HEADER_CONFIG = {
+    "permission": "Sales",
+    "rights_module": "sales",
+    "rights_resource": "sales",
+    "rights_view_resource": "sales",
+}
+SALES_DETAIL_CONFIG = {
+    "permission": "Sales",
+    "rights_module": "sales",
+    "rights_resource": "sale_details",
+    "rights_view_resource": "sale_details",
+}
+
+
+@app.errorhandler(httpx.TimeoutException)
+def handle_upstream_timeout(_error):
+    app.logger.warning(
+        "Supabase request timed out while handling %s",
+        request.path,
+        exc_info=(type(_error), _error, _error.__traceback__),
+    )
+    message = "The application could not reach Supabase in time. Please try again."
+    if request.path.startswith("/api/"):
+        return jsonify(error=message), 503, {"Retry-After": "3"}
+    return render_template("service_unavailable.html"), 503, {"Retry-After": "3"}
+
+
 RIGHTS_MODULES = (
     "Customer",
     "Product",
@@ -231,6 +316,8 @@ def validate_api_csrf_token():
     protected_paths = (
         request.path.startswith("/api/records/")
         or request.path.startswith("/api/products/")
+        or request.path.startswith("/api/sales/")
+        or request.path == "/api/sales"
         or request.path.startswith("/api/users")
         or request.path in {"/api/logout", "/logout"}
     )
@@ -648,6 +735,55 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
+    if allowed and slug == "sales":
+        try:
+            sales_actions, detail_actions = get_sales_actions(
+                client, profile, permissions
+            )
+        except (APIError, httpx.HTTPError):
+            app.logger.exception("Sales permissions could not be loaded")
+            return render_template(
+                "module_workspace.html",
+                profile=profile,
+                module=module,
+                allowed=False,
+                permission_error=True,
+                sidebar_modules=module_cards(permissions),
+            ), 503
+        return render_template(
+            "sales.html",
+            profile=profile,
+            module=module,
+            is_admin=profile["role"] in {"admin", "superadmin"},
+            sales_actions=sales_actions,
+            detail_actions=detail_actions,
+            sidebar_modules=module_cards(permissions),
+        )
+    if allowed and slug == "reports":
+        try:
+            report_rights = get_report_rights(client, profile, permissions)
+        except (APIError, httpx.HTTPError):
+            app.logger.exception("Report permissions could not be loaded")
+            return render_template(
+                "module_workspace.html",
+                profile=profile,
+                module=module,
+                allowed=False,
+                permission_error=True,
+                sidebar_modules=module_cards(permissions),
+            ), 503
+        accessible_reports = [
+            report for report in REPORTS
+            if profile["role"] in {"admin", "superadmin"}
+            or report["right_code"] in report_rights
+        ]
+        return render_template(
+            "reports.html",
+            profile=profile,
+            module=module,
+            reports=accessible_reports,
+            sidebar_modules=module_cards(permissions),
+        )
     record_slug = (
         path_parts[1] if len(path_parts) > 1 else "departments"
     ) if slug == "human-resources" else slug
@@ -2340,6 +2476,1443 @@ def api_register():
             status="pending",
         ),
         201,
+    )
+
+
+def get_sales_actions(client, profile, permissions):
+    return (
+        get_record_actions(client, profile, SALES_HEADER_CONFIG, permissions),
+        get_record_actions(client, profile, SALES_DETAIL_CONFIG, permissions),
+    )
+
+
+def get_sales_access(action=None, details=False):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, None, (
+            jsonify(error="You must be logged in."),
+            401,
+        )
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, None, (
+            jsonify(error="This account is not active."),
+            403,
+        )
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        sales_actions, detail_actions = get_sales_actions(
+            client, profile, permissions
+        )
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Sales permissions could not be loaded")
+        return None, None, None, None, (
+            jsonify(error="Sales permissions could not be checked."),
+            503,
+        )
+    if not sales_actions["view"]:
+        return None, None, None, None, (
+            jsonify(error="Sales view access is required."),
+            403,
+        )
+    actions = detail_actions if details else sales_actions
+    if details and not detail_actions["view"]:
+        return None, None, None, None, (
+            jsonify(error="Sale detail view access is required."),
+            403,
+        )
+    if action and not actions[action]:
+        return None, None, None, None, (
+            jsonify(error="You do not have permission for this action."),
+            403,
+        )
+    return client, profile, sales_actions, detail_actions, None
+
+
+def report_rights_for_user(client, profile, permissions):
+    if profile["role"] in {"admin", "superadmin"}:
+        return {report["right_code"] for report in REPORTS}
+    try:
+        assignments = (
+            client.table("user_permission")
+            .select("right_code")
+            .eq("user_id", profile["id"])
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code not in {"PGRST205", "42P01"}:
+            raise
+        assignments = None
+    if assignments is not None and assignments.data:
+        return {row["right_code"] for row in assignments.data}
+    if permissions["Reports"]["view"]:
+        return {report["right_code"] for report in REPORTS}
+    return set()
+
+
+def get_report_rights(client, profile, permissions):
+    return report_rights_for_user(client, profile, permissions)
+
+
+def report_access(report_slug):
+    report = next((item for item in REPORTS if item["slug"] == report_slug), None)
+    if report is None:
+        return None, None, None, (
+            jsonify(error="Report not found."),
+            404,
+        )
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, (
+            jsonify(error="You must be logged in."),
+            401,
+        )
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, (
+            jsonify(error="This account is not active."),
+            403,
+        )
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        granted = report_rights_for_user(client, profile, permissions)
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Report permissions could not be loaded")
+        return None, None, None, (
+            jsonify(error="Report permissions could not be checked."),
+            503,
+        )
+    if report["right_code"] not in granted:
+        return None, None, None, (
+            jsonify(error="You do not have permission to open this report."),
+            403,
+        )
+    return client, profile, report, None
+
+
+def parse_iso_date(value):
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.isoformat() == value else None
+
+
+def sales_header_values(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "salesDate", "custNo", "empNo"
+    }:
+        return None, "Enter a sale date, customer, and employee."
+    sales_date = parse_iso_date(payload.get("salesDate"))
+    if sales_date is None:
+        return None, "Enter a valid sale date."
+    values = {"salesdate": sales_date.isoformat()}
+    for key, column, label in (
+        ("custNo", "custno", "Customer"),
+        ("empNo", "empno", "Employee"),
+    ):
+        value = payload.get(key)
+        if not isinstance(value, str) or not value.strip():
+            return None, f"Choose a {label.lower()}."
+        value = value.strip()
+        if len(value) > 5:
+            return None, f"Choose a valid {label.lower()}."
+        values[column] = value
+    return values, None
+
+
+def decimal_form_value(value, label, maximum, allow_zero=False):
+    if not isinstance(value, str):
+        return None, f"Enter a valid {label.lower()}."
+    try:
+        parsed = Decimal(value.strip())
+    except InvalidOperation:
+        return None, f"Enter a valid {label.lower()}."
+    if (
+        not parsed.is_finite()
+        or parsed < 0
+        or (parsed == 0 and not allow_zero)
+        or parsed > maximum
+        or parsed.as_tuple().exponent < -2
+    ):
+        return None, f"{label} must be a positive amount with at most 2 decimal places."
+    return format(parsed.quantize(Decimal("0.01")), "f"), None
+
+
+def sales_detail_values(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {"quantity"}:
+        return None, "Enter a quantity."
+    quantity, error = decimal_form_value(
+        payload.get("quantity"),
+        "Quantity",
+        Decimal("99999999.99"),
+    )
+    if error:
+        return None, error
+    return {"quantity": quantity}, None
+
+
+def payment_values(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {"payDate", "amount"}:
+        return None, "Enter a payment date and amount."
+    pay_date = parse_iso_date(payload.get("payDate"))
+    if pay_date is None:
+        return None, "Enter a valid payment date."
+    amount, error = decimal_form_value(
+        payload.get("amount"),
+        "Amount",
+        Decimal("99999999.99"),
+    )
+    if error:
+        return None, error
+    return {"paydate": pay_date.isoformat(), "amount": amount}, None
+
+
+def next_number(existing, prefix):
+    highest = 0
+    for row in existing:
+        value = row.get("transno" if prefix == "TR" else "orno")
+        if (
+            isinstance(value, str)
+            and value.startswith(prefix)
+            and len(value) == 8
+            and value[2:].isdigit()
+        ):
+            highest = max(highest, int(value[2:]))
+    if highest >= 999999:
+        raise ValueError(f"No {prefix} numbers are available.")
+    return f"{prefix}{highest + 1:06d}"
+
+
+def sales_error_response(error):
+    app.logger.exception("Sales request could not be completed")
+    if isinstance(error, (APIError, RuntimeError)):
+        return jsonify(error="Sales data needs database setup or is blocked by access policies."), 503
+    return jsonify(error="Sales request could not be completed. Please try again."), 502
+
+
+def report_error_response(error):
+    app.logger.exception("Report request could not be completed")
+    if isinstance(error, (APIError, RuntimeError)):
+        return jsonify(error="Report data needs database setup or is blocked by access policies."), 503
+    return jsonify(error="Report could not be generated. Please try again."), 502
+
+
+def active_product_references(admin_client):
+    products = (
+        admin_client.table("product_active")
+        .select("prodcode,description,unit")
+        .order("description")
+        .execute()
+        .data or []
+    )
+    prices = (
+        admin_client.table("pricehist_current")
+        .select("prodcode,effdate,unitprice")
+        .execute()
+        .data or []
+    )
+    return (
+        {row["prodcode"]: row for row in products},
+        {row["prodcode"]: row for row in prices},
+    )
+
+
+def active_customer_employee_references(admin_client):
+    customers = (
+        admin_client.table("customer_active")
+        .select("custno,custname")
+        .order("custname")
+        .execute()
+        .data or []
+    )
+    employees = (
+        admin_client.table("employee_active")
+        .select("empno,firstname,lastname")
+        .order("lastname")
+        .execute()
+        .data or []
+    )
+    return (
+        {row["custno"]: row for row in customers},
+        {row["empno"]: row for row in employees},
+    )
+
+
+def sale_reference_error(admin_client, values):
+    customer = (
+        admin_client.table("customer_active")
+        .select("custno")
+        .eq("custno", values["custno"])
+        .maybe_single()
+        .execute()
+    )
+    if customer.data is None:
+        return "Choose an active customer."
+    employee = (
+        admin_client.table("employee_active")
+        .select("empno")
+        .eq("empno", values["empno"])
+        .maybe_single()
+        .execute()
+    )
+    if employee.data is None:
+        return "Choose an active employee."
+    return None
+
+
+@app.get("/api/sales")
+def api_list_sales():
+    client, profile, sales_actions, detail_actions, error = get_sales_access()
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    if not is_admin:
+        requested_status = "active"
+    try:
+        active_rows = (
+            client.table("sales_active")
+            .select("transno,salesdate,custno,empno,stamp")
+            .order("salesdate", desc=True)
+            .order("transno", desc=True)
+            .execute()
+            .data or []
+        )
+        inactive_rows = []
+        if is_admin:
+            inactive_rows = (
+                client.table("sales")
+                .select("transno,salesdate,custno,empno,is_deleted,stamp")
+                .eq("is_deleted", True)
+                .order("salesdate", desc=True)
+                .order("transno", desc=True)
+                .execute()
+                .data or []
+            )
+        active_rows = [
+            {**row, "is_deleted": False}
+            for row in active_rows
+        ]
+        counts = {
+            "active": len(active_rows),
+            "inactive": len(inactive_rows),
+            "all": len(active_rows) + len(inactive_rows),
+        }
+        rows = (
+            active_rows if requested_status == "active"
+            else inactive_rows if requested_status == "inactive"
+            else active_rows + inactive_rows
+        )
+        admin_client = get_admin_client()
+        customer_map, employee_map = active_customer_employee_references(
+            admin_client
+        )
+        balances = (
+            admin_client.table("v_sale_payment_balance")
+            .select("transno,total_amount,total_paid,balance,status")
+            .execute()
+            .data or []
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+
+    balance_map = {row["transno"]: row for row in balances}
+    records = []
+    for row in rows:
+        customer = customer_map.get(row.get("custno"), {})
+        employee = employee_map.get(row.get("empno"), {})
+        balance = balance_map.get(row["transno"], {})
+        records.append({
+            "transNo": row["transno"],
+            "salesDate": row.get("salesdate"),
+            "custNo": row.get("custno"),
+            "customerName": customer.get("custname"),
+            "empNo": row.get("empno"),
+            "employeeName": " ".join(
+                item for item in (
+                    employee.get("firstname"),
+                    employee.get("lastname"),
+                ) if item
+            ),
+            "totalAmount": balance.get("total_amount", "0.00"),
+            "totalPaid": balance.get("total_paid", "0.00"),
+            "balance": balance.get("balance", "0.00"),
+            "paymentStatus": balance.get("status", "unpaid"),
+            "isDeleted": row.get("is_deleted") is True,
+            "stamp": display_stamp(row.get("stamp")) if is_admin else None,
+        })
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        records = [
+            record for record in records
+            if any(
+                search in str(record.get(key) or "").casefold()
+                for key in (
+                    "transNo", "salesDate", "custNo", "customerName",
+                    "empNo", "employeeName", "paymentStatus",
+                )
+            )
+        ]
+    return jsonify(
+        records=records,
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            "sales": {
+                action: sales_actions[action]
+                for action in ("create", "edit", "delete")
+            },
+            "details": {
+                action: detail_actions[action]
+                for action in ("view", "create", "edit", "delete")
+            },
+            "payments": {
+                "create": sales_actions["create"],
+                "edit": sales_actions["edit"],
+                "delete": sales_actions["delete"],
+            },
+        },
+    )
+
+
+@app.get("/api/sales/lookups")
+def api_sales_lookups():
+    _, _, sales_actions, detail_actions, error = get_sales_access()
+    if error:
+        return error
+    if not (
+        sales_actions["create"]
+        or sales_actions["edit"]
+        or detail_actions["create"]
+    ):
+        return jsonify(error="Sale entry permission is required to load these choices."), 403
+    try:
+        admin_client = get_admin_client()
+        customer_map = {}
+        employee_map = {}
+        product_map = {}
+        price_map = {}
+        if sales_actions["create"] or sales_actions["edit"]:
+            customer_map, employee_map = active_customer_employee_references(
+                admin_client
+            )
+        if detail_actions["create"]:
+            product_map, price_map = active_product_references(admin_client)
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    return jsonify(
+        customers=[
+            {"custNo": key, "custName": row.get("custname")}
+            for key, row in customer_map.items()
+        ],
+        employees=[
+            {
+                "empNo": key,
+                "name": " ".join(
+                    item for item in (
+                        row.get("firstname"), row.get("lastname")
+                    ) if item
+                ),
+            }
+            for key, row in employee_map.items()
+        ],
+        products=[
+            {
+                "prodCode": key,
+                "description": row.get("description"),
+                "unit": row.get("unit"),
+                "currentPrice": price_map.get(key, {}).get("unitprice"),
+            }
+            for key, row in product_map.items()
+        ],
+    )
+
+
+@app.post("/api/sales")
+def api_create_sale():
+    client, _, _, _, error = get_sales_access(
+        "create"
+    )
+    if error:
+        return error
+    values, validation_error = sales_header_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        admin_client = get_admin_client()
+        reference_error = sale_reference_error(admin_client, values)
+        if reference_error:
+            return jsonify(error=reference_error), 400
+        for _ in range(5):
+            existing = (
+                client.table("sales")
+                .select("transno")
+                .order("transno", desc=True)
+                .limit(1)
+                .execute()
+                .data or []
+            )
+            values["transno"] = next_number(existing, "TR")
+            try:
+                response = client.table("sales").insert(values).execute()
+                row = response.data[0] if response.data else None
+                return jsonify(
+                    message="Sale created.",
+                    transNo=row.get("transno") if row else values["transno"],
+                ), 201
+            except APIError as error:
+                if error.code != "23505":
+                    raise
+        return jsonify(error="A transaction number could not be reserved. Please retry."), 409
+    except ValueError as error:
+        return jsonify(error=str(error)), 409
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+
+
+@app.patch("/api/sales/<transno>")
+def api_edit_sale(transno):
+    client, _, _, _, error = get_sales_access(
+        "edit"
+    )
+    if error:
+        return error
+    values, validation_error = sales_header_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        admin_client = get_admin_client()
+        reference_error = sale_reference_error(admin_client, values)
+        if reference_error:
+            return jsonify(error=reference_error), 400
+        current = (
+            client.table("sales_active")
+            .select("transno")
+            .eq("transno", transno)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Active sale not found."), 404
+        updated = (
+            client.table("sales")
+            .update(values)
+            .eq("transno", transno)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not updated.data:
+        return jsonify(error="Active sale not found."), 404
+    return jsonify(message="Sale updated.")
+
+
+@app.patch("/api/sales/<transno>/delete")
+def api_delete_sale(transno):
+    client, _, _, _, error = get_sales_access(
+        "delete"
+    )
+    if error:
+        return error
+    try:
+        response = (
+            client.table("sales")
+            .update({"is_deleted": True})
+            .eq("transno", transno)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code in {"P0001", "23514"}:
+            return jsonify(
+                error="Delete or deactivate this sale's active lines and payments first."
+            ), 409
+        return sales_error_response(error)
+    except (httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Active sale not found."), 404
+    return jsonify(message="Sale moved to Inactive.")
+
+
+@app.patch("/api/sales/<transno>/restore")
+def api_restore_sale(transno):
+    client, profile, _, _, error = get_sales_access(
+        "delete"
+    )
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive sales."), 403
+    try:
+        response = (
+            client.table("sales")
+            .update({"is_deleted": False})
+            .eq("transno", transno)
+            .eq("is_deleted", True)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Inactive sale not found."), 404
+    return jsonify(message="Sale restored.")
+
+
+def get_sale_for_details(client, transno, is_admin, requested_status="active"):
+    if requested_status == "inactive" and is_admin:
+        query = (
+            client.table("sales")
+            .select("transno,salesdate,custno,empno,is_deleted,stamp")
+            .eq("transno", transno)
+            .eq("is_deleted", True)
+        )
+    else:
+        query = (
+            client.table("sales_active")
+            .select("transno,salesdate,custno,empno,stamp")
+            .eq("transno", transno)
+        )
+    return query.maybe_single().execute().data
+
+
+@app.get("/api/sales/<transno>")
+def api_get_sale(transno):
+    client, profile, sales_actions, detail_actions, error = get_sales_access(
+        details=True
+    )
+    if error:
+        return error
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive"}:
+        return jsonify(error="Choose Active or Inactive."), 400
+    if not is_admin:
+        requested_status = "active"
+    try:
+        sale = get_sale_for_details(
+            client, transno, is_admin, requested_status
+        )
+        if sale is None:
+            return jsonify(error="Sale not found."), 404
+        active_lines = (
+            client.table("salesdetail_active")
+            .select("transno,prodcode,quantity")
+            .eq("transno", transno)
+            .execute()
+            .data or []
+        )
+        inactive_lines = []
+        active_payments = (
+            client.table("payment_active")
+            .select("orno,paydate,amount,transno")
+            .eq("transno", transno)
+            .execute()
+            .data or []
+        )
+        inactive_payments = []
+        if is_admin:
+            inactive_lines = (
+                client.table("salesdetail")
+                .select("transno,prodcode,quantity,is_deleted,stamp")
+                .eq("transno", transno)
+                .eq("is_deleted", True)
+                .execute()
+                .data or []
+            )
+            inactive_payments = (
+                client.table("payment")
+                .select("orno,paydate,amount,transno,is_deleted,stamp")
+                .eq("transno", transno)
+                .eq("is_deleted", True)
+                .execute()
+                .data or []
+            )
+        admin_client = get_admin_client()
+        line_amounts = (
+            admin_client
+            .table("v_sale_line_amounts")
+            .select("transno,prodcode,quantity,unitprice,line_amount")
+            .eq("transno", transno)
+            .execute()
+            .data or []
+        )
+        balance_response = (
+            admin_client
+            .table("v_sale_payment_balance")
+            .select("total_amount,total_paid,balance,status")
+            .eq("transno", transno)
+            .maybe_single()
+            .execute()
+        )
+        products = (
+            admin_client.table("product_active")
+            .select("prodcode,description,unit")
+            .execute()
+            .data or []
+        )
+        product_map = {row["prodcode"]: row for row in products}
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+
+    line_amount_map = {row["prodcode"]: row for row in line_amounts}
+    lines = []
+    for row in active_lines + inactive_lines:
+        amount = line_amount_map.get(row["prodcode"], {})
+        product = product_map.get(row["prodcode"], {})
+        lines.append({
+            "prodCode": row["prodcode"],
+            "description": product.get("description"),
+            "unit": product.get("unit"),
+            "quantity": row.get("quantity"),
+            "unitPrice": amount.get("unitprice"),
+            "lineAmount": amount.get("line_amount"),
+            "isDeleted": row.get("is_deleted") is True,
+            "stamp": display_stamp(row.get("stamp")) if is_admin else None,
+        })
+    payments = [
+        {
+            "orNo": row["orno"],
+            "payDate": row.get("paydate"),
+            "amount": row.get("amount"),
+            "isDeleted": row.get("is_deleted") is True,
+            "stamp": display_stamp(row.get("stamp")) if is_admin else None,
+        }
+        for row in active_payments + inactive_payments
+    ]
+    balance = balance_response.data or {
+        "total_amount": "0.00",
+        "total_paid": "0.00",
+        "balance": "0.00",
+        "status": "paid",
+    }
+    return jsonify(
+        sale={
+            "transNo": sale["transno"],
+            "salesDate": sale.get("salesdate"),
+            "custNo": sale.get("custno"),
+            "empNo": sale.get("empno"),
+            "isDeleted": sale.get("is_deleted") is True,
+            "stamp": display_stamp(sale.get("stamp")) if is_admin else None,
+        },
+        totalAmount=balance["total_amount"],
+        totalPaid=balance["total_paid"],
+        balance=balance["balance"],
+        paymentStatus=balance["status"],
+        lines=lines,
+        payments=payments,
+        actions={
+            "sales": {
+                "edit": sales_actions["edit"],
+                "delete": sales_actions["delete"],
+            },
+            "details": {
+                action: detail_actions[action]
+                for action in ("create", "edit", "delete")
+            },
+            "payments": {
+                "create": sales_actions["create"],
+                "edit": sales_actions["edit"],
+                "delete": sales_actions["delete"],
+            },
+        },
+        is_admin=is_admin,
+    )
+
+
+@app.post("/api/sales/<transno>/details")
+def api_add_sale_detail(transno):
+    client, _, _, _, error = get_sales_access(
+        "create", details=True
+    )
+    if error:
+        return error
+    payload = get_user_payload()
+    if not isinstance(payload, Mapping) or set(payload) != {"prodCode", "quantity"}:
+        return jsonify(error="Choose a product and enter a quantity."), 400
+    values, validation_error = sales_detail_values(
+        {"quantity": payload.get("quantity")}
+    )
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    prodcode = payload.get("prodCode")
+    if not isinstance(prodcode, str) or not prodcode.strip() or len(prodcode.strip()) > 6:
+        return jsonify(error="Choose an active product."), 400
+    prodcode = prodcode.strip()
+    try:
+        sale = (
+            client.table("sales_active")
+            .select("transno,salesdate")
+            .eq("transno", transno)
+            .maybe_single()
+            .execute()
+        )
+        if sale.data is None:
+            return jsonify(error="Active sale not found."), 404
+        admin_client = get_admin_client()
+        product = (
+            admin_client.table("product_active")
+            .select("prodcode")
+            .eq("prodcode", prodcode)
+            .maybe_single()
+            .execute()
+        )
+        if product.data is None:
+            return jsonify(error="Choose an active product."), 400
+        price = (
+            admin_client.table("pricehist_active")
+            .select("unitprice")
+            .eq("prodcode", prodcode)
+            .lte("effdate", sale.data["salesdate"])
+            .order("effdate", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not price.data:
+            return jsonify(
+                error="This product has no price effective on the sale date."
+            ), 400
+        response = client.table("salesdetail").insert({
+            "transno": transno,
+            "prodcode": prodcode,
+            **values,
+        }).execute()
+    except APIError as error:
+        if error.code == "23505":
+            return jsonify(error="That product is already on this sale."), 409
+        return sales_error_response(error)
+    except (httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    return jsonify(
+        message="Sale detail added.",
+        record=response.data[0] if response.data else None,
+    ), 201
+
+
+@app.patch("/api/sales/<transno>/details/<prodcode>")
+def api_edit_sale_detail(transno, prodcode):
+    client, _, _, _, error = get_sales_access(
+        "edit", details=True
+    )
+    if error:
+        return error
+    values, validation_error = sales_detail_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        current = (
+            client.table("salesdetail_active")
+            .select("transno")
+            .eq("transno", transno)
+            .eq("prodcode", prodcode)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Active sale detail not found."), 404
+        response = (
+            client.table("salesdetail")
+            .update(values)
+            .eq("transno", transno)
+            .eq("prodcode", prodcode)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Active sale detail not found."), 404
+    return jsonify(message="Sale detail updated.")
+
+
+@app.patch("/api/sales/<transno>/details/<prodcode>/delete")
+def api_delete_sale_detail(transno, prodcode):
+    client, _, _, _, error = get_sales_access(
+        "delete", details=True
+    )
+    if error:
+        return error
+    try:
+        response = (
+            client.table("salesdetail")
+            .update({"is_deleted": True})
+            .eq("transno", transno)
+            .eq("prodcode", prodcode)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Active sale detail not found."), 404
+    return jsonify(message="Sale detail moved to Inactive.")
+
+
+@app.patch("/api/sales/<transno>/details/<prodcode>/restore")
+def api_restore_sale_detail(transno, prodcode):
+    client, profile, _, _, error = get_sales_access(
+        "delete", details=True
+    )
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive sale details."), 403
+    try:
+        response = (
+            client.table("salesdetail")
+            .update({"is_deleted": False})
+            .eq("transno", transno)
+            .eq("prodcode", prodcode)
+            .eq("is_deleted", True)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Inactive sale detail not found."), 404
+    return jsonify(message="Sale detail restored.")
+
+
+@app.post("/api/sales/<transno>/payments")
+def api_add_sale_payment(transno):
+    client, _, _, _, error = get_sales_access(
+        "create"
+    )
+    if error:
+        return error
+    values, validation_error = payment_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        sale = (
+            client.table("sales_active")
+            .select("transno")
+            .eq("transno", transno)
+            .maybe_single()
+            .execute()
+        )
+        if sale.data is None:
+            return jsonify(error="Active sale not found."), 404
+        for _ in range(5):
+            existing = (
+                client.table("payment")
+                .select("orno")
+                .order("orno", desc=True)
+                .limit(1)
+                .execute()
+                .data or []
+            )
+            values["orno"] = next_number(existing, "OR")
+            values["transno"] = transno
+            try:
+                response = client.table("payment").insert(values).execute()
+                return jsonify(
+                    message="Payment added.",
+                    orNo=response.data[0]["orno"] if response.data else values["orno"],
+                ), 201
+            except APIError as error:
+                if error.code != "23505":
+                    raise
+        return jsonify(error="A receipt number could not be reserved. Please retry."), 409
+    except ValueError as error:
+        return jsonify(error=str(error)), 409
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+
+
+@app.patch("/api/sales/<transno>/payments/<orno>")
+def api_edit_sale_payment(transno, orno):
+    client, _, _, _, error = get_sales_access(
+        "edit"
+    )
+    if error:
+        return error
+    values, validation_error = payment_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        current = (
+            client.table("payment_active")
+            .select("orno")
+            .eq("orno", orno)
+            .eq("transno", transno)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Active payment not found."), 404
+        response = (
+            client.table("payment")
+            .update(values)
+            .eq("orno", orno)
+            .eq("transno", transno)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Active payment not found."), 404
+    return jsonify(message="Payment updated.")
+
+
+@app.patch("/api/sales/<transno>/payments/<orno>/delete")
+def api_delete_sale_payment(transno, orno):
+    client, _, _, _, error = get_sales_access(
+        "delete"
+    )
+    if error:
+        return error
+    try:
+        response = (
+            client.table("payment")
+            .update({"is_deleted": True})
+            .eq("orno", orno)
+            .eq("transno", transno)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Active payment not found."), 404
+    return jsonify(message="Payment moved to Inactive.")
+
+
+@app.patch("/api/sales/<transno>/payments/<orno>/restore")
+def api_restore_sale_payment(transno, orno):
+    client, profile, _, _, error = get_sales_access(
+        "delete"
+    )
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive payments."), 403
+    try:
+        response = (
+            client.table("payment")
+            .update({"is_deleted": False})
+            .eq("orno", orno)
+            .eq("transno", transno)
+            .eq("is_deleted", True)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_error_response(error)
+    if not response.data:
+        return jsonify(error="Inactive payment not found."), 404
+    return jsonify(message="Payment restored.")
+
+
+def parse_report_filters(report, args):
+    filters = {}
+    if "dates" in report["filters"]:
+        from_date = parse_iso_date(args.get("fromDate"))
+        to_date = parse_iso_date(args.get("toDate"))
+        if from_date is None or to_date is None:
+            return None, "Enter valid From and To dates."
+        if from_date > to_date:
+            return None, "From date must be on or before To date."
+        filters["fromDate"] = from_date.isoformat()
+        filters["toDate"] = to_date.isoformat()
+    if "top_n" in report["filters"]:
+        raw_top_n = args.get("topN", "10")
+        if not isinstance(raw_top_n, str) or not raw_top_n.isdigit():
+            return None, "Top N must be a whole number from 1 to 100."
+        top_n = int(raw_top_n)
+        if not 1 <= top_n <= 100:
+            return None, "Top N must be a whole number from 1 to 100."
+        filters["topN"] = top_n
+    if "employee" in report["filters"]:
+        employee_no = args.get("employeeNo", "").strip()
+        if not employee_no or len(employee_no) > 5:
+            return None, "Choose an employee."
+        filters["employeeNo"] = employee_no
+    return filters, None
+
+
+def report_decimal(value):
+    try:
+        return Decimal(str(value or "0"))
+    except InvalidOperation:
+        return Decimal("0")
+
+
+def report_amount(value):
+    return format(report_decimal(value).quantize(Decimal("0.01")), "f")
+
+
+def report_quantity(value):
+    return format(report_decimal(value).quantize(Decimal("0.01")), "f")
+
+
+def report_sales_in_range(admin_client, filters):
+    query = admin_client.table("sales_active").select(
+        "transno,salesdate,custno,empno"
+    )
+    if filters:
+        query = query.gte("salesdate", filters["fromDate"]).lte(
+            "salesdate", filters["toDate"]
+        )
+    return query.order("salesdate", desc=True).execute().data or []
+
+
+def report_columns_and_rows(admin_client, report, filters):
+    report_slug = report["slug"]
+    if report_slug in {"top-customers", "top-products"}:
+        sales = report_sales_in_range(admin_client, filters)
+        sale_map = {row["transno"]: row for row in sales}
+        transnos = list(sale_map)
+        lines = []
+        if transnos:
+            lines = (
+                admin_client.table("v_sale_line_amounts")
+                .select("transno,prodcode,quantity,line_amount")
+                .in_("transno", transnos)
+                .execute()
+                .data or []
+            )
+        if report_slug == "top-customers":
+            customers = (
+                admin_client.table("customer")
+                .select("custno,custname")
+                .execute()
+                .data or []
+            )
+            customer_map = {row["custno"]: row for row in customers}
+            totals = {}
+            for line in lines:
+                custno = sale_map[line["transno"]].get("custno")
+                if custno:
+                    totals[custno] = totals.get(custno, Decimal("0")) + report_decimal(
+                        line.get("line_amount")
+                    )
+            rows = [
+                {
+                    "custNo": custno,
+                    "custName": customer_map.get(custno, {}).get("custname") or "—",
+                    "totalSales": report_amount(total),
+                }
+                for custno, total in totals.items()
+            ]
+            rows.sort(key=lambda row: (-Decimal(row["totalSales"]), row["custNo"]))
+            return [
+                {"key": "custNo", "label": "Customer No"},
+                {"key": "custName", "label": "Customer"},
+                {"key": "totalSales", "label": "Total Sales"},
+            ], rows[:filters["topN"]]
+
+        products = (
+            admin_client.table("product")
+            .select("prodcode,description,unit")
+            .execute()
+            .data or []
+        )
+        product_map = {row["prodcode"]: row for row in products}
+        totals = {}
+        for line in lines:
+            prodcode = line["prodcode"]
+            total = totals.setdefault(
+                prodcode, {"quantity": Decimal("0"), "amount": Decimal("0")}
+            )
+            total["quantity"] += report_decimal(line.get("quantity"))
+            total["amount"] += report_decimal(line.get("line_amount"))
+        rows = [
+            {
+                "prodCode": prodcode,
+                "description": product_map.get(prodcode, {}).get("description") or "—",
+                "quantitySold": report_quantity(total["quantity"]),
+                "totalSales": report_amount(total["amount"]),
+            }
+            for prodcode, total in totals.items()
+        ]
+        rows.sort(
+            key=lambda row: (-Decimal(row["totalSales"]), row["prodCode"])
+        )
+        return [
+            {"key": "prodCode", "label": "Product Code"},
+            {"key": "description", "label": "Product"},
+            {"key": "quantitySold", "label": "Quantity Sold"},
+            {"key": "totalSales", "label": "Sales Amount"},
+        ], rows[:filters["topN"]]
+
+    if report_slug == "product-master-list":
+        products = (
+            admin_client.table("product_active")
+            .select("prodcode,description,unit")
+            .order("description")
+            .execute()
+            .data or []
+        )
+        prices = (
+            admin_client.table("pricehist_current")
+            .select("prodcode,effdate,unitprice")
+            .execute()
+            .data or []
+        )
+        price_map = {row["prodcode"]: row for row in prices}
+        rows = [
+            {
+                "prodCode": product["prodcode"],
+                "description": product.get("description"),
+                "unit": product.get("unit"),
+                "currentPrice": report_amount(
+                    price_map.get(product["prodcode"], {}).get("unitprice")
+                ) if product["prodcode"] in price_map else "—",
+                "effectiveDate": price_map.get(product["prodcode"], {}).get("effdate") or "—",
+            }
+            for product in products
+        ]
+        return [
+            {"key": "prodCode", "label": "Product Code"},
+            {"key": "description", "label": "Description"},
+            {"key": "unit", "label": "Unit"},
+            {"key": "currentPrice", "label": "Current Price"},
+            {"key": "effectiveDate", "label": "Effective Date"},
+        ], rows
+
+    if report_slug in {"active-employees", "all-employees"}:
+        employees = (
+            admin_client.table("employee_active")
+            .select("empno,firstname,lastname,gender,hiredate,sepdate")
+            .order("lastname")
+            .order("firstname")
+            .execute()
+            .data or []
+        )
+        current_rows = (
+            admin_client.table("v_employee_current")
+            .select("empno,jobcode,jobdesc,deptcode,deptname")
+            .execute()
+            .data or []
+        )
+        current_map = {row["empno"]: row for row in current_rows}
+        if report_slug == "active-employees":
+            employees = [row for row in employees if row.get("sepdate") is None]
+        rows = []
+        for employee in employees:
+            current = current_map.get(employee["empno"], {})
+            rows.append({
+                "empNo": employee["empno"],
+                "employeeName": " ".join(
+                    item for item in (
+                        employee.get("firstname"), employee.get("lastname")
+                    ) if item
+                ),
+                "gender": employee.get("gender"),
+                "hireDate": employee.get("hiredate"),
+                "separationDate": employee.get("sepdate"),
+                "jobCode": current.get("jobcode"),
+                "jobTitle": current.get("jobdesc"),
+                "department": current.get("deptname"),
+            })
+        columns = [
+            {"key": "empNo", "label": "Employee No"},
+            {"key": "employeeName", "label": "Employee"},
+            {"key": "gender", "label": "Gender"},
+            {"key": "hireDate", "label": "Hire Date"},
+            {"key": "jobTitle", "label": "Current Job"},
+            {"key": "department", "label": "Department"},
+        ]
+        if report_slug == "all-employees":
+            columns.insert(5, {"key": "separationDate", "label": "Separation Date"})
+        return columns, rows
+
+    if report_slug == "employee-job-history":
+        employee_no = filters["employeeNo"]
+        employee_response = (
+            admin_client.table("employee_active")
+            .select("empno")
+            .eq("empno", employee_no)
+            .maybe_single()
+            .execute()
+        )
+        if employee_response.data is None:
+            raise ValueError("Choose an active employee.")
+        history = (
+            admin_client.table("jobhistory_active")
+            .select("effdate,jobcode,salary,deptcode")
+            .eq("empno", employee_no)
+            .order("effdate")
+            .execute()
+            .data or []
+        )
+        jobs = admin_client.table("job").select("jobcode,jobdesc").execute().data or []
+        departments = (
+            admin_client.table("department")
+            .select("deptcode,deptname")
+            .execute()
+            .data or []
+        )
+        job_map = {row["jobcode"]: row for row in jobs}
+        department_map = {row["deptcode"]: row for row in departments}
+        rows = [
+            {
+                "effectiveDate": row.get("effdate"),
+                "jobCode": row.get("jobcode"),
+                "jobTitle": job_map.get(row.get("jobcode"), {}).get("jobdesc"),
+                "department": department_map.get(row.get("deptcode"), {}).get("deptname"),
+                "salary": report_amount(row.get("salary")),
+            }
+            for row in history
+        ]
+        return [
+            {"key": "effectiveDate", "label": "Effective Date"},
+            {"key": "jobCode", "label": "Job Code"},
+            {"key": "jobTitle", "label": "Job Title"},
+            {"key": "department", "label": "Department"},
+            {"key": "salary", "label": "Salary"},
+        ], rows
+
+    if report_slug == "top-sales":
+        sales = report_sales_in_range(admin_client, filters)
+        transnos = [row["transno"] for row in sales]
+        totals = []
+        if transnos:
+            totals = (
+                admin_client.table("v_sale_payment_balance")
+                .select("transno,total_amount")
+                .in_("transno", transnos)
+                .execute()
+                .data or []
+            )
+        total_map = {row["transno"]: row["total_amount"] for row in totals}
+        customers = admin_client.table("customer").select("custno,custname").execute().data or []
+        employees = admin_client.table("employee").select("empno,firstname,lastname").execute().data or []
+        customer_map = {row["custno"]: row for row in customers}
+        employee_map = {row["empno"]: row for row in employees}
+        rows = [
+            {
+                "transNo": sale["transno"],
+                "salesDate": sale.get("salesdate"),
+                "customer": customer_map.get(sale.get("custno"), {}).get("custname") or "—",
+                "employee": " ".join(
+                    item for item in (
+                        employee_map.get(sale.get("empno"), {}).get("firstname"),
+                        employee_map.get(sale.get("empno"), {}).get("lastname"),
+                    ) if item
+                ),
+                "totalAmount": report_amount(total_map.get(sale["transno"])),
+            }
+            for sale in sales
+        ]
+        rows.sort(
+            key=lambda row: (-Decimal(row["totalAmount"]), row["salesDate"] or "", row["transNo"])
+        )
+        return [
+            {"key": "transNo", "label": "Transaction No"},
+            {"key": "salesDate", "label": "Sale Date"},
+            {"key": "customer", "label": "Customer"},
+            {"key": "employee", "label": "Employee"},
+            {"key": "totalAmount", "label": "Total"},
+        ], rows[:filters["topN"]]
+
+    raise ValueError("Report not found.")
+
+
+@app.get("/reports/<report_slug>")
+def report_workspace(report_slug):
+    report = next((item for item in REPORTS if item["slug"] == report_slug), None)
+    if report is None:
+        return redirect("/reports")
+    client = get_authenticated_client()
+    if client is None:
+        return redirect(url_for("login"))
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        session.clear()
+        return redirect(url_for("login"))
+    if must_set_password(client.auth.get_user().user):
+        return redirect(url_for("set_password"))
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        granted = report_rights_for_user(client, profile, permissions)
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Report permissions could not be loaded")
+        return render_template(
+            "module_workspace.html",
+            profile=profile,
+            module=WORKSPACE_MODULES[-1],
+            allowed=False,
+            permission_error=True,
+            sidebar_modules=[],
+        ), 503
+    if report["right_code"] not in granted:
+        return render_template(
+            "module_workspace.html",
+            profile=profile,
+            module=WORKSPACE_MODULES[-1],
+            allowed=False,
+            permission_error=False,
+            sidebar_modules=module_cards(permissions),
+        ), 403
+    return render_template(
+        "report.html",
+        profile=profile,
+        module=WORKSPACE_MODULES[-1],
+        report=report,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/api/reports/employee-job-history/options")
+def api_report_employee_options():
+    _, _, _, error = report_access("employee-job-history")
+    if error:
+        return error
+    try:
+        employees = (
+            get_admin_client()
+            .table("employee_active")
+            .select("empno,firstname,lastname")
+            .order("lastname")
+            .order("firstname")
+            .execute()
+            .data or []
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return report_error_response(error)
+    return jsonify(employees=[
+        {
+            "empNo": employee["empno"],
+            "name": " ".join(
+                item for item in (
+                    employee.get("firstname"), employee.get("lastname")
+                ) if item
+            ),
+        }
+        for employee in employees
+    ])
+
+
+@app.get("/api/reports/<report_slug>")
+def api_run_report(report_slug):
+    _, _, report, error = report_access(report_slug)
+    if error:
+        return error
+    filters, validation_error = parse_report_filters(report, request.args)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        columns, rows = report_columns_and_rows(
+            get_admin_client(), report, filters
+        )
+    except ValueError as error:
+        return jsonify(error=str(error)), 400
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return report_error_response(error)
+    return jsonify(
+        report=report["slug"],
+        title=report["name"],
+        columns=columns,
+        rows=rows,
     )
 
 

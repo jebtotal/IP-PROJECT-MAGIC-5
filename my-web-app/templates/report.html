@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% set page_title = report.name %}
+{% block title %}{{ report.name }} | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.reportConfig = {
+      slug: {{ report.slug|tojson }},
+      name: {{ report.name|tojson }},
+      filters: {{ report.filters|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='reports.js', v='1') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> REPORTS MODULE</span>
+      <h2>{{ report.name }}</h2>
+      <p>{{ report.description }}</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel report-panel" aria-label="{{ report.name }}">
+    <form id="report-filters" class="report-filters">
+      {% if "dates" in report.filters %}
+        <label>From date<input id="report-from-date" name="fromDate" type="date" required></label>
+        <label>To date<input id="report-to-date" name="toDate" type="date" required></label>
+      {% endif %}
+      {% if "top_n" in report.filters %}
+        <label>Top N<input id="report-top-n" name="topN" type="number" min="1" max="100" step="1" value="10" required></label>
+      {% endif %}
+      {% if "employee" in report.filters %}
+        <label>Employee<select id="report-employee" name="employeeNo" required><option value="">Choose employee...</option></select></label>
+      {% endif %}
+      <button type="submit" id="report-run" class="btn btn-primary">Run Report</button>
+    </form>
+
+    <div class="report-actions">
+      <button type="button" id="report-print" class="btn btn-secondary" disabled><i class="fa-solid fa-print" aria-hidden="true"></i> Print</button>
+      <button type="button" id="report-pdf" class="btn btn-secondary" disabled><i class="fa-solid fa-file-pdf" aria-hidden="true"></i> Save as PDF</button>
+    </div>
+    <p id="report-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table report-table">
+        <caption id="report-caption" class="sr-only">{{ report.name }} results</caption>
+        <thead id="report-head"></thead>
+        <tbody id="report-body"></tbody>
+      </table>
+    </div>
+    <p id="report-print-note" class="report-print-note">To save as PDF, choose “Save as PDF” in your browser’s print dialog.</p>
+  </section>
+  <p class="auth-footer"><a href="/reports">Back to Reports</a></p>
+{% endblock %}
