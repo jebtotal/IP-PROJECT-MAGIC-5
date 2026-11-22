@@ -210,6 +210,27 @@ The HOPE schema is split into timestamp-ordered migrations:
   active views while remaining in the base tables, lists the relevant
   indexes, then rolls back the fixtures.
 
+- `20261122000500_s2_dba_02_price_as_of.sql` adds the reusable scalar function
+  `public.price_as_of(p_prodcode VARCHAR, p_as_of_date DATE) RETURNS
+  NUMERIC(10,2)`. It returns the latest non-deleted `pricehist.unitprice`
+  whose `effdate` is on or before the supplied date, or `NULL` when none
+  exists. A future-dated price is therefore ignored until its effective date.
+  The existing primary key `(effdate, prodcode)` allows at most one row per
+  product/date, making same-date price ties impossible; the test verifies the
+  constraint rejects such a duplicate rather than inventing a precedence.
+  `public.v_product_current_price` lists active products and their price as of
+  `CURRENT_DATE` (NULL when no price is yet effective). The function and view
+  are invoker-security objects with access granted to `authenticated`.
+  The migration adds `pricehist_prodcode_effdate_idx` on
+  `(prodcode, effdate DESC)` only when an equivalent valid B-tree index is
+  absent; the primary key's `(effdate, prodcode)` index does not support a
+  product-first lookup. Migration notices show the price-history index
+  definitions before and after deployment.
+  Run `supabase/tests/s2_dba_02_price_as_of.sql` in a scratch/copy database
+  as a database owner. It checks no eligible price, the latest prior price,
+  ignoring a future price, using it when its date arrives, the current-price
+  view, and duplicate-date rejection; fixtures are rolled back.
+
 - `supabase/seeds/s3_dba_05_hr_demo_data.sql` adds the explicitly synthetic
   HR-only demo departments, jobs, employees, and history rows. It includes a
   promotion, transfer, future-dated job change, separated employee, soft-deleted
