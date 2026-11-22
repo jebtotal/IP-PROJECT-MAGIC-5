@@ -356,7 +356,7 @@ RECORD_MODULES = {
         "key": "transno",
         "key_field": "transNo",
         "display_field": "transNo",
-        "allowed_actions": ("view", "create"),
+        "allowed_actions": ("view", "create", "delete"),
         "fields": (
             {
                 "name": "transNo",
@@ -1491,6 +1491,22 @@ def sales_payment_error_response(error):
     return record_error_response(error, {"name": "Sales payment"})
 
 
+def sales_status_error_response(error, action):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            message = (
+                "Only administrators with Sales Delete permission can restore a sale."
+                if action == "restore"
+                else "Sales Delete permission is required."
+            )
+            return jsonify(error=message), 403
+        if error.code == "P0002":
+            return jsonify(error=f"The sale could not be {action}d because its status changed."), 404
+        if error.code == "22023":
+            return jsonify(error="A valid transaction number is required."), 400
+    return record_error_response(error, {"name": "Sales"})
+
+
 def get_report_rights(client, profile):
     if profile["role"] in {"admin", "superadmin"}:
         return list(REPORTS)
@@ -2312,6 +2328,7 @@ def api_list_sales():
     business_columns = [field["column"] for field in fields]
     admin_columns = ", ".join(business_columns + ["is_deleted", "stamp"])
     try:
+        balance_response = client.rpc("hope_sales_balance_data").execute()
         active_rows = (
             client.table("sales_active")
             .select(", ".join(business_columns))
@@ -2336,6 +2353,19 @@ def api_list_sales():
     if not isinstance(options, Mapping):
         app.logger.error("Sales form options RPC returned an invalid response")
         return jsonify(error="Sales list choices could not be loaded."), 502
+    balances = balance_response.data
+    if (
+        not isinstance(balances, Mapping)
+        or not isinstance(balances.get("transactions"), list)
+        or not isinstance(balances.get("customers"), list)
+    ):
+        app.logger.error("Sales balance RPC returned an invalid response")
+        return jsonify(error="Sales balances could not be loaded."), 502
+    transaction_balances = {
+        row.get("transactionNo"): row
+        for row in balances["transactions"]
+        if isinstance(row, Mapping) and isinstance(row.get("transactionNo"), str)
+    }
     customer_names = {
         row["customerNo"]: row.get("customerName")
         for row in options.get("customers", [])
@@ -2370,18 +2400,56 @@ def api_list_sales():
         record = record_response_record(row, config, is_admin)
         record["customerName"] = customer_names.get(row.get("custno"))
         record["salespersonName"] = salesperson_names.get(row.get("empno"))
+        balance = transaction_balances.get(row.get("transno"))
+        record["totalAmount"] = balance.get("totalAmount") if balance else None
+        record["totalPaid"] = balance.get("totalPaid") if balance else None
+        record["balance"] = balance.get("balance") if balance else None
+        record["paymentStatus"] = balance.get("status") if balance else None
         records.append(record)
     return jsonify(
         records=records,
+        customerBalances=balances["customers"],
         counts=counts if is_admin else None,
         is_admin=is_admin,
         actions={
             "create": actions["create"],
-            "edit": False,
-            "delete": False,
+            "delete": actions["delete"],
+            "restore": is_admin and actions["delete"],
             "saleDetails": options.get("saleDetailActions"),
         },
     )
+
+
+@app.patch("/api/sales/<trans_no>/delete")
+def api_delete_sale(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "delete")
+    if error:
+        return error
+    try:
+        client.rpc("hope_set_sale_deleted", {
+            "p_transno": trans_no,
+            "p_is_deleted": True,
+        }).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_status_error_response(error, "delete")
+    return jsonify(message=f"Sale {trans_no} moved to Inactive.")
+
+
+@app.patch("/api/sales/<trans_no>/restore")
+def api_restore_sale(trans_no):
+    client, profile, _config, _actions, error = get_record_access("sales", "delete")
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive sales."), 403
+    try:
+        client.rpc("hope_set_sale_deleted", {
+            "p_transno": trans_no,
+            "p_is_deleted": False,
+        }).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_status_error_response(error, "restore")
+    return jsonify(message=f"Sale {trans_no} restored.")
 
 
 @app.post("/api/sales")

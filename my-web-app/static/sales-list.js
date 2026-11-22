@@ -2,6 +2,8 @@ const config = window.salesListConfig;
 const searchInput = document.querySelector("#sales-search");
 const salesBody = document.querySelector("#sales-body");
 const salesMessage = document.querySelector("#sales-message");
+const customerBalancesBody = document.querySelector("#sales-customer-balances-body");
+const customerBalancesMessage = document.querySelector("#sales-customer-balances-message");
 const salesOptionsMessage = document.querySelector("#sales-options-message");
 const addButton = document.querySelector("#sale-add");
 const salesTabs = document.querySelector("#sales-tabs");
@@ -99,6 +101,14 @@ function renderSales(records, detailActions) {
         : record.empNo,
       "Salesperson",
     );
+    addCell(row, formatBalanceAmount(record.totalAmount), "Total");
+    addCell(row, formatBalanceAmount(record.totalPaid), "Paid");
+    addCell(row, formatBalanceAmount(record.balance), "Balance");
+    addCell(
+      row,
+      record.paymentStatus ? record.paymentStatus[0].toUpperCase() + record.paymentStatus.slice(1) : "—",
+      "Payment Status",
+    );
     const detailsCell = addCell(row, "", "Details");
     if (!record.isDeleted) {
       const detailsButton = document.createElement("button");
@@ -115,8 +125,64 @@ function renderSales(records, detailActions) {
       status.classList.add("record-status");
       addCell(row, record.stamp, "Stamp");
     }
+    const actions = document.createElement("td");
+    actions.dataset.label = "Actions";
+    if (record.isDeleted) {
+      if (currentActions.restore) {
+        const restoreButton = document.createElement("button");
+        restoreButton.type = "button";
+        restoreButton.className = "btn btn-secondary";
+        restoreButton.dataset.restoreSale = record.transNo;
+        restoreButton.textContent = "Restore";
+        actions.appendChild(restoreButton);
+      }
+    } else if (currentActions.delete) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "btn btn-secondary";
+      deleteButton.dataset.deleteSale = record.transNo;
+      deleteButton.textContent = "Delete";
+      actions.appendChild(deleteButton);
+    }
+    if (!actions.childElementCount) actions.textContent = "—";
+    row.appendChild(actions);
     salesBody.appendChild(row);
   }
+}
+
+function formatBalanceAmount(value) {
+  return value === null || value === undefined ? "—" : formatPrice(value);
+}
+
+function renderCustomerBalances(records) {
+  customerBalancesBody.replaceChildren();
+  const search = searchInput.value.trim().toLocaleLowerCase();
+  const visibleRecords = records.filter((record) =>
+    !search ||
+    String(record.customerNo || "").toLocaleLowerCase().includes(search) ||
+    String(record.customerName || "").toLocaleLowerCase().includes(search)
+  );
+  for (const record of visibleRecords) {
+    const row = document.createElement("tr");
+    addCell(
+      row,
+      `${record.customerName || record.customerNo} (${record.customerNo})`,
+      "Customer",
+    );
+    addCell(row, formatBalanceAmount(record.totalAmount), "Sales Total");
+    addCell(row, formatBalanceAmount(record.totalPaid), "Paid");
+    addCell(row, formatBalanceAmount(record.balance), "Balance");
+    const status = record.status
+      ? record.status[0].toUpperCase() + record.status.slice(1)
+      : "—";
+    addCell(row, status, "Status");
+    customerBalancesBody.appendChild(row);
+  }
+  customerBalancesMessage.textContent = visibleRecords.length
+    ? ""
+    : search
+      ? "No customer balances match this search."
+      : "No active customers were found.";
 }
 
 function updateCounts(counts) {
@@ -141,10 +207,12 @@ async function loadSales() {
       salesMessage.textContent = "Apply the Sales Details migration to manage sale line items.";
     }
     renderSales(result.records, result.actions.saleDetails);
+    renderCustomerBalances(result.customerBalances);
     updateCounts(result.counts);
   } catch (error) {
     salesMessage.textContent = error instanceof Error ? error.message : "Sales could not be loaded.";
     salesBody.replaceChildren();
+    customerBalancesBody.replaceChildren();
   }
 }
 
@@ -189,6 +257,24 @@ function formatPrice(value) {
   return Number.isFinite(amount)
     ? new Intl.NumberFormat("en-PH", {style: "currency", currency: "PHP"}).format(amount)
     : "No price";
+}
+
+async function updateSaleStatus(transactionNo, restore) {
+  const action = restore ? "restore" : "delete";
+  if (!restore && !window.confirm(`Move sale ${transactionNo} to Inactive?`)) return;
+  try {
+    const result = await request(
+      `/api/sales/${encodeURIComponent(transactionNo)}/${action}`,
+      {method: "PATCH"},
+    );
+    showToast(result.message);
+    await loadSales();
+  } catch (error) {
+    showToast(
+      error instanceof Error ? error.message : `Sale could not be ${action}d.`,
+      "error",
+    );
+  }
 }
 
 function resetSaleDetailForm() {
@@ -443,6 +529,16 @@ async function createSale(event) {
 
 addButton.addEventListener("click", openSaleDialog);
 salesBody.addEventListener("click", (event) => {
+  const deleteButton = event.target.closest("[data-delete-sale]");
+  if (deleteButton && currentActions.delete) {
+    updateSaleStatus(deleteButton.dataset.deleteSale, false);
+    return;
+  }
+  const restoreButton = event.target.closest("[data-restore-sale]");
+  if (restoreButton && currentActions.restore) {
+    updateSaleStatus(restoreButton.dataset.restoreSale, true);
+    return;
+  }
   const button = event.target.closest("[data-transaction-no]");
   if (button) openSaleDetails(button.dataset.transactionNo);
 });

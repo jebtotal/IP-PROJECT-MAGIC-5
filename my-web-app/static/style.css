@@ -508,6 +508,10 @@ dialog { color: var(--text-main); }
 .rights-group-controls { display: flex; grid-column: 1 / -1; gap: 0.35rem; }
 .rights-group-controls .btn { min-height: 1.7rem; padding: 0.25rem 0.55rem; font-size: 0.6rem; }
 .record-panel { padding: clamp(0.9rem, 2vw, 1.4rem); }
+.sales-table { min-width: 76rem; }
+.sales-customer-balances { display: grid; gap: 0.65rem; margin-top: 1.5rem; padding-top: 1.2rem; border-top: 1px solid var(--border-color); }
+.sales-customer-balances h3 { margin: 0.25rem 0 0; color: var(--text-main); font-size: 1rem; font-weight: 900; }
+.sales-customer-balance-table { min-width: 48rem; }
 .sales-add-button[hidden] { display: none; }
 #sale-detail-add[hidden],#sale-detail-cancel[hidden],#sale-detail-form-wrap[hidden] { display: none; }
 #sale-payment-add[hidden],#sale-payment-form-wrap[hidden] { display: none; }
@@ -646,6 +650,7 @@ html[data-sidebar-collapsed="true"] .logout-button { width: 2rem; height: 2rem; 
   .header-actions { margin-left: auto; }
   .management-grid { grid-template-columns: minmax(0, 1fr); }
   .management-table { display: block; }
+  .sales-table,.sales-customer-balance-table { min-width: 0; }
   .management-table thead { display: none; }
   .management-table tbody { display: grid; gap: 0.75rem; }
   .management-table tr { display: block; padding: 0.55rem 0.75rem; border: 1px solid var(--border-color); border-radius: 0.8rem; }

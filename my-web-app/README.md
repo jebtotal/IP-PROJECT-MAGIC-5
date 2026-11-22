@@ -379,6 +379,14 @@ The HOPE schema is split into timestamp-ordered migrations:
   and `20261122000800_s4_dba_01_02_sales_balance_views.sql`.
   Each report right is assigned independently in User Management, in addition
   to Reports View. Print / Save as PDF uses the browser print dialog.
+- `20261122001300_s4_bld_05_sales_balances_soft_delete.sql` exposes the
+  transaction and customer payment balances to users with Sales View and adds
+  permission-checked sale soft delete/restore. Sales Delete is required to
+  move a sale inactive; restore additionally requires an administrator role.
+  The existing stamp trigger records delete/restore actions. Sale lines and
+  payments remain attached while a sale is inactive, so restoring it reactivates
+  the transaction without discarding history. Apply after the Sales balance
+  views and the Sales header migration.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -586,7 +594,11 @@ mutations. Assign those rights through User Management. Apply
 against active transactions; the Sales Add right controls payment entry.
 Apply `20261122001200_s4_bld_04_reports.sql` to enable Reports. Users need both
 Reports View and each report's dedicated View right; assign them independently
-through User Management.
+through User Management. Apply
+`20261122001300_s4_bld_05_sales_balances_soft_delete.sql` to show transaction
+and customer balances and enable Sales soft delete/restore. Sales Delete governs
+deactivation, while only administrators can restore inactive sales. The
+separate Sale Details rights continue to govern line-item read and mutations.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing
