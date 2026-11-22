@@ -69,6 +69,66 @@ WORKSPACE_MODULES = (
     {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
 )
 RECORD_MODULES = {
+    "jobs": {
+        "module_slug": "jobs",
+        "name": "Jobs",
+        "singular": "Job",
+        "permission": "Human Resources",
+        "rights_module": "hr",
+        "rights_resource": "jobs",
+        "rights_view_resource": "hr",
+        "table": "job",
+        "active_view": "job_active",
+        "key": "jobcode",
+        "key_field": "jobCode",
+        "display_field": "jobDesc",
+        "fields": (
+            {
+                "name": "jobCode",
+                "column": "jobcode",
+                "label": "Job Code",
+                "maxlength": 4,
+                "required": True,
+            },
+            {
+                "name": "jobDesc",
+                "column": "jobdesc",
+                "label": "Job Description",
+                "maxlength": 20,
+                "required": True,
+            },
+        ),
+    },
+    "departments": {
+        "module_slug": "departments",
+        "name": "Departments",
+        "singular": "Department",
+        "permission": "Human Resources",
+        "rights_module": "hr",
+        "rights_resource": "departments",
+        "rights_view_resource": "hr",
+        "table": "department",
+        "active_view": "department_active",
+        "key": "deptcode",
+        "key_field": "deptCode",
+        "display_field": "deptName",
+        "fields": (
+            {
+                "name": "deptCode",
+                "column": "deptcode",
+                "label": "Department Code",
+                "maxlength": 3,
+                "required": True,
+            },
+            {
+                "name": "deptName",
+                "column": "deptname",
+                "label": "Department Name",
+                "maxlength": 20,
+                "required": True,
+            },
+        ),
+    },
     "customers": {
         "module_slug": "customers",
         "name": "Customers",
@@ -552,6 +612,7 @@ def api_check_module_permission(module, action):
 @app.get("/customers")
 @app.get("/products")
 @app.get("/human-resources")
+@app.get("/human-resources/jobs")
 @app.get("/sales")
 @app.get("/reports")
 def module_workspace():
@@ -568,7 +629,8 @@ def module_workspace():
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
 
-    slug = request.path.strip("/")
+    path_parts = request.path.strip("/").split("/")
+    slug = path_parts[0]
     module = next((item for item in WORKSPACE_MODULES if item["slug"] == slug), None)
     if module is None:
         return redirect(url_for("index"))
@@ -586,8 +648,11 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
-    if allowed and slug in RECORD_MODULES:
-        record_config = RECORD_MODULES[slug]
+    record_slug = (
+        path_parts[1] if len(path_parts) > 1 else "departments"
+    ) if slug == "human-resources" else slug
+    if allowed and record_slug in RECORD_MODULES:
+        record_config = RECORD_MODULES[record_slug]
         return render_template(
             "record_list.html",
             profile=profile,
@@ -629,32 +694,87 @@ def user_management():
 def get_record_access(module_slug, action):
     client = get_authenticated_client()
     if client is None:
-        return None, None, None, (jsonify(error="You must be logged in."), 401)
+        return None, None, None, None, (jsonify(error="You must be logged in."), 401)
     profile = get_current_profile(client)
     if not profile_is_active(profile):
-        return None, None, None, (jsonify(error="This account is not active."), 403)
+        return None, None, None, None, (jsonify(error="This account is not active."), 403)
     config = RECORD_MODULES.get(module_slug)
     if config is None:
-        return None, None, None, (jsonify(error="Unknown module."), 404)
+        return None, None, None, None, (jsonify(error="Unknown module."), 404)
     try:
         permissions = get_permissions_for_user(client, profile)
+        actions = get_record_actions(client, profile, config, permissions)
     except (APIError, httpx.HTTPError):
         app.logger.exception("Record permissions could not be loaded")
-        return None, None, None, (
+        return None, None, None, None, (
             jsonify(error="Module access needs database setup or could not be checked."),
             503,
         )
-    if not has_permission(permissions, config["permission"], "view"):
-        return None, None, None, (
+    if not actions["view"]:
+        return None, None, None, None, (
             jsonify(error="View access is required for this module."),
             403,
         )
-    if not has_permission(permissions, config["permission"], action):
-        return None, None, None, (
+    if not actions[action]:
+        return None, None, None, None, (
             jsonify(error="You do not have permission for this action."),
             403,
         )
-    return client, profile, config, None
+    return client, profile, config, actions, None
+
+
+def get_record_actions(client, profile, config, permissions):
+    if profile["role"] in {"admin", "superadmin"}:
+        return {action: True for action in RIGHTS_ACTIONS}
+
+    rights_module = config.get("rights_module")
+    rights_resource = config.get("rights_resource")
+    if not rights_module or not rights_resource:
+        return {
+            action: has_permission(permissions, config["permission"], action)
+            for action in RIGHTS_ACTIONS
+        }
+
+    try:
+        assignments = (
+            client.table("user_permission")
+            .select("right_code")
+            .eq("user_id", profile["id"])
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code not in {"PGRST205", "42P01"}:
+            raise
+        assignments = None
+
+    if assignments is None or not assignments.data:
+        return {
+            action: has_permission(permissions, config["permission"], action)
+            for action in RIGHTS_ACTIONS
+        }
+
+    right_codes = [row["right_code"] for row in assignments.data]
+    catalog = (
+        client.table("right_catalog")
+        .select("right_code, resource_code, action")
+        .eq("module_code", rights_module)
+        .in_("right_code", right_codes)
+        .execute()
+    )
+    granted = {
+        (row["resource_code"], row["action"])
+        for row in catalog.data or []
+    }
+    return {
+        action: (
+            config.get("rights_view_resource", rights_resource)
+            if action == "view"
+            else rights_resource,
+            "add" if action == "create" else action,
+        ) in granted
+        for action in RIGHTS_ACTIONS
+    }
 
 
 def record_error_response(error, config):
@@ -1050,7 +1170,7 @@ def api_restore_price_history(product_code, effective_date):
 
 @app.get("/api/records/<module_slug>")
 def api_list_records(module_slug):
-    client, profile, config, error = get_record_access(module_slug, "view")
+    client, profile, config, actions, error = get_record_access(module_slug, "view")
     if error:
         return error
 
@@ -1127,25 +1247,17 @@ def api_list_records(module_slug):
             price_map = {}
         for record in records:
             record["currentPrice"] = price_map.get(record.get("prodCode"))
-    try:
-        permissions = get_permissions_for_user(client, profile)
-    except (APIError, httpx.HTTPError):
-        app.logger.exception("Record action permissions could not be loaded")
-        return jsonify(error="Module access needs database setup or could not be checked."), 503
     return jsonify(
         records=records,
         counts=counts if is_admin else None,
         is_admin=is_admin,
-        actions={
-            action: has_permission(permissions, config["permission"], action)
-            for action in ("create", "edit", "delete")
-        },
+        actions={action: actions[action] for action in ("create", "edit", "delete")},
     )
 
 
 @app.post("/api/records/<module_slug>")
 def api_create_record(module_slug):
-    client, profile, config, error = get_record_access(module_slug, "create")
+    client, profile, config, _actions, error = get_record_access(module_slug, "create")
     if error:
         return error
     values, validation_error = record_form_values(config, get_user_payload())
@@ -1167,7 +1279,7 @@ def api_create_record(module_slug):
 
 @app.patch("/api/records/<module_slug>/<record_id>")
 def api_edit_record(module_slug, record_id):
-    client, profile, config, error = get_record_access(module_slug, "edit")
+    client, profile, config, _actions, error = get_record_access(module_slug, "edit")
     if error:
         return error
     values, validation_error = record_form_values(config, get_user_payload(), editing=True)
@@ -1206,7 +1318,7 @@ def api_edit_record(module_slug, record_id):
 
 @app.patch("/api/records/<module_slug>/<record_id>/delete")
 def api_delete_record(module_slug, record_id):
-    client, profile, config, error = get_record_access(module_slug, "delete")
+    client, profile, config, _actions, error = get_record_access(module_slug, "delete")
     if error:
         return error
     try:
@@ -1256,6 +1368,22 @@ def api_delete_record(module_slug, record_id):
             return jsonify(
                 error="This customer cannot be deleted while active sales are linked."
             ), 409
+        if (
+            module_slug == "departments"
+            and error.code == "P0001"
+            and "Cannot delete department row:" in str(error)
+        ):
+            return jsonify(
+                error="This department cannot be deleted while active job history is linked."
+            ), 409
+        if (
+            module_slug == "jobs"
+            and error.code == "P0001"
+            and "Cannot delete job row:" in str(error)
+        ):
+            return jsonify(
+                error="This job cannot be deleted while active job history is linked."
+            ), 409
         return record_error_response(error, config)
     except (httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
@@ -1266,7 +1394,7 @@ def api_delete_record(module_slug, record_id):
 
 @app.patch("/api/records/<module_slug>/<record_id>/restore")
 def api_restore_record(module_slug, record_id):
-    client, profile, config, error = get_record_access(module_slug, "delete")
+    client, profile, config, _actions, error = get_record_access(module_slug, "delete")
     if error:
         return error
     if profile["role"] not in {"admin", "superadmin"}:
