@@ -387,6 +387,11 @@ The HOPE schema is split into timestamp-ordered migrations:
   payments remain attached while a sale is inactive, so restoring it reactivates
   the transaction without discarding history. Apply after the Sales balance
   views and the Sales header migration.
+- `20261122001400_s1_bld_09_audit_log_viewer.sql` installs a read-only,
+  paginated audit-log RPC. It supports both the source HOPE audit schema and
+  the app's existing audit schema, and checks the caller's active Superadmin
+  profile inside the database function. Apply after
+  `20261109000000_hope_app_access.sql`.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -599,6 +604,10 @@ through User Management. Apply
 and customer balances and enable Sales soft delete/restore. Sales Delete governs
 deactivation, while only administrators can restore inactive sales. The
 separate Sale Details rights continue to govern line-item read and mutations.
+Apply `20261122001400_s1_bld_09_audit_log_viewer.sql` after
+`20261109000000_hope_app_access.sql` to enable the Audit Log link and viewer for
+active Superadmins. Search and paging are server-side; changes are displayed
+read-only and the viewer does not provide audit mutation actions.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

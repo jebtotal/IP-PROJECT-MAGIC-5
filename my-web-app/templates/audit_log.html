@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% set page_title = "Audit Log" %}
+{% block title %}Audit Log | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script src="{{ url_for('static', filename='audit-log.js', v='1') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> SYSTEM ACTIVITY</span>
+      <h2>Audit Log</h2>
+      <p>Review recorded changes across user accounts and business records.</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel record-panel" aria-label="Audit log entries">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search audit log</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="audit-search" type="search" placeholder="Search actor, event, record, or change..." autocomplete="off">
+      </label>
+    </div>
+    <p id="audit-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table record-table audit-log-table">
+        <thead>
+          <tr>
+            <th scope="col">Date / Time</th>
+            <th scope="col">Actor</th>
+            <th scope="col">Event</th>
+            <th scope="col">Record</th>
+            <th scope="col">Changes</th>
+          </tr>
+        </thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+    <nav class="audit-pagination" aria-label="Audit log pages">
+      <button id="audit-previous" type="button" class="btn btn-secondary">Previous</button>
+      <span id="audit-page-label" aria-live="polite"></span>
+      <button id="audit-next" type="button" class="btn btn-secondary">Next</button>
+    </nav>
+  </section>
+{% endblock %}
