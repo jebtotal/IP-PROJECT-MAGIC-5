@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import sys
 import unittest
+from unittest.mock import patch
 
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -108,6 +109,81 @@ class SalesPaymentValidationTests(unittest.TestCase):
         )
         self.assertIsNone(values)
         self.assertIn("valid payment amount", error)
+
+
+class SalesStatusRouteTests(unittest.TestCase):
+    class RpcClient:
+        def __init__(self):
+            self.calls = []
+
+        def rpc(self, name, params):
+            self.calls.append((name, params))
+            return self
+
+        def execute(self):
+            return type("Response", (), {"data": True})()
+
+    def request_with_csrf(self, client, path):
+        with client.session_transaction() as session:
+            session["csrf_token"] = "test-token"
+        return client.patch(path, headers={"X-CSRF-Token": "test-token"})
+
+    def test_delete_uses_permission_checked_soft_delete_rpc(self):
+        rpc_client = self.RpcClient()
+        with patch.object(
+            web_app,
+            "get_record_access",
+            return_value=(rpc_client, {"role": "user"}, {}, {"delete": True}, None),
+        ):
+            response = self.request_with_csrf(
+                web_app.app.test_client(),
+                "/api/sales/TR000001/delete",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            rpc_client.calls,
+            [(
+                "hope_set_sale_deleted",
+                {"p_transno": "TR000001", "p_is_deleted": True},
+            )],
+        )
+
+    def test_non_admin_cannot_restore_sale(self):
+        rpc_client = self.RpcClient()
+        with patch.object(
+            web_app,
+            "get_record_access",
+            return_value=(rpc_client, {"role": "user"}, {}, {"delete": True}, None),
+        ):
+            response = self.request_with_csrf(
+                web_app.app.test_client(),
+                "/api/sales/TR000001/restore",
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(rpc_client.calls, [])
+
+    def test_admin_restore_uses_permission_checked_soft_delete_rpc(self):
+        rpc_client = self.RpcClient()
+        with patch.object(
+            web_app,
+            "get_record_access",
+            return_value=(rpc_client, {"role": "admin"}, {}, {"delete": True}, None),
+        ):
+            response = self.request_with_csrf(
+                web_app.app.test_client(),
+                "/api/sales/TR000001/restore",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            rpc_client.calls,
+            [(
+                "hope_set_sale_deleted",
+                {"p_transno": "TR000001", "p_is_deleted": False},
+            )],
+        )
 
 
 class ReportFilterTests(unittest.TestCase):

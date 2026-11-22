@@ -8,7 +8,7 @@
       today: {{ today|tojson }}
     };
   </script>
-  <script src="{{ url_for('static', filename='sales-list.js', v='4') }}" defer></script>
+  <script src="{{ url_for('static', filename='sales-list.js', v='5') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -50,16 +50,43 @@
             <th scope="col">Sale Date</th>
             <th scope="col">Customer</th>
             <th scope="col">Salesperson</th>
+            <th scope="col">Total</th>
+            <th scope="col">Paid</th>
+            <th scope="col">Balance</th>
+            <th scope="col">Payment Status</th>
             <th scope="col">Details / Payments</th>
             {% if is_admin %}
               <th scope="col">Status</th>
               <th scope="col">Stamp</th>
             {% endif %}
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody id="sales-body"></tbody>
       </table>
     </div>
+
+    <section class="sales-customer-balances" aria-labelledby="sales-customer-balances-heading">
+      <div>
+        <span class="eyebrow">CUSTOMER ACCOUNT SUMMARY</span>
+        <h3 id="sales-customer-balances-heading">Customer Balances</h3>
+      </div>
+      <p id="sales-customer-balances-message" class="table-message" role="status" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table class="management-table record-table sales-customer-balance-table">
+          <thead>
+            <tr>
+              <th scope="col">Customer</th>
+              <th scope="col">Sales Total</th>
+              <th scope="col">Paid</th>
+              <th scope="col">Balance</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="sales-customer-balances-body"></tbody>
+        </table>
+      </div>
+    </section>
   </section>
 
   <dialog id="sale-dialog" class="app-dialog" aria-labelledby="sale-dialog-title">
