@@ -312,6 +312,17 @@ The HOPE schema is split into timestamp-ordered migrations:
   modify the database. Database execution is still required to produce live
   output.
 
+- `20261122000700_s2_dba_06_search_indexes.sql` adds partial indexes for
+  selective administrator inactive-row filters on Customer and Product. The
+  active list fetches return all active rows and substring search is performed
+  in Python, so the migration does not add speculative name/description or
+  active-row indexes. The throwaway generator and before/after `EXPLAIN`
+  queries are in
+  `supabase/tests/s2_dba_06_customer_product_index_benchmark.sql`; run them
+  only on a scratch database. See
+  [the S2-DBA-06 benchmark notes](docs/s2-dba-06-search-index-tuning.md) for
+  measured plans and timings.
+
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
 `20261108000100_hope_operational_tables_preserve_audit.sql` followed by the
