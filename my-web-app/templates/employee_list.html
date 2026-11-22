@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% set page_title = "Employees" %}
+{% block title %}Employees | PentadERP{% endblock %}
+
+{% block content %}
+<section class="management-heading record-heading">
+  <div>
+    <span class="eyebrow"><span class="status-dot"></span> HUMAN RESOURCES MODULE</span>
+    <h2>Employees</h2>
+  </div>
+  <div class="table-actions">
+    {% if profile.role in ("admin", "superadmin") %}
+    <a class="btn btn-gradient" href="/human-resources/employees/add">Add Employee</a>
+    {% endif %}
+  </div>
+</section>
+
+{% if profile.role in ("admin", "superadmin") %}
+<nav class="record-tabs" aria-label="Human Resources lists">
+  <a class="record-tab{% if tab == 'active' %} is-active{% endif %}" href="/human-resources/employees?tab=active">
+    Active <span data-count-active="{{ count_active }}">({{ count_active }})</span>
+  </a>
+  <a class="record-tab{% if tab == 'inactive' %} is-active{% endif %}" href="/human-resources/employees?tab=inactive">
+    Inactive <span data-count-inactive="{{ count_inactive }}">({{ count_inactive }})</span>
+  </a>
+  <a class="record-tab{% if tab == 'all' %} is-active{% endif %}" href="/human-resources/employees?tab=all">
+    All <span data-count-all="{{ count_all }}">({{ count_all }})</span>
+  </a>
+</nav>
+{% endif %}
+
+<div class="table-wrap overflow-x-auto">
+  <table class="management-table">
+    <thead>
+      <tr>
+        <th>Employee No.</th>
+        <th>Name</th>
+        <th>Role</th>
+        <th>Department</th>
+        {% if profile.role in ("admin", "superadmin") %}
+        <th>Status</th>
+        <th>Stamp</th>
+        {% endif %}
+        <th class="actions">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for employee in employees %}
+      <tr class="{% if employee.is_deleted %}record-deleted{% endif %}">
+        <td>{{ employee.empno }}</td>
+        <td>
+          <a href="/human-resources/employees/{{ employee.empno }}">{{ employee.firstname }} {{ employee.lastname }}</a>
+        </td>
+        <td>{{ employee.role }}</td>
+        <td>{{ employee.department }}</td>
+        {% if profile.role in ("admin", "superadmin") %}
+        <td>
+          {% if employee.is_deleted %}<span class="status-badge status-inactive">Inactive{% elif not employee.is_current %}<span class="status-badge is-separated">Separated{% else %}<span class="status-badge" style="background: rgba(16, 185, 129, 0.12); color: #059669;">Active{% endif %}</span>{% endif %}
+        </td>
+        <td>
+          {% if employee.is_deleted %}
+            {% if employee.status == 'RESTORED' %}<span class="status-badge" style="background: rgba(16, 185, 129, 0.12); color: #059669;">RESTORED</span>
+            {% elif employee.status %}<span class="status-badge">{{ employee.status }}{% if employee.stamp_user %}+ {{ employee.stamp_user }}{% endif %}{% if employee.stamp_dt %}+ {{ employee.stamp_dt }}{% endif %}</span>{% else %}<span class="status-badge">—</span>{% endif %}
+          {% elif profile.role in ("admin", "superadmin") %}
+            <span class="status-badge">—</span>
+          {% endif %}
+        </td>
+        {% endif %}
+        <td class="actions">
+          {% if profile.role in ("admin", "superadmin") and not employee.is_deleted %}
+            <a class="btn btn-secondary btn-sm" href="/human-resources/employees/{{ employee.empno }}/job-history">View Job History</a>
+            {% if can_restore %}<a class="btn btn-secondary btn-sm" href="/human-resources/employees/{{ employee.empno }}/restore">Restore</a>{% endif %}
+          {% endif %}
+          {% if not employee.is_deleted and profile.role == "user" %}
+            <span class="status-badge">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="7" class="table-message">No employees found.<br><a class="btn btn-gradient" href="/human-resources/employees/add">Add Employee</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if profile.role != "user" %}
+<div class="record-toolbar">
+  {% if profile.role in ("admin", "superadmin") %}
+  <div class="rights-toolbar">
+    <span class="text-xs text-gray-500">Signed in as {{ profile.role|title }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
