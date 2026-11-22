@@ -131,6 +131,14 @@ function renderRecords(records) {
         `/products/${encodeURIComponent(record[config.keyField])}/price-history`;
       actions.appendChild(priceHistoryButton);
     }
+    if (config.module === "employees" && currentActions.profileView) {
+      const profileButton = document.createElement("a");
+      profileButton.className = "btn btn-secondary";
+      profileButton.textContent = "Profile";
+      profileButton.href =
+        `/human-resources/employees/${encodeURIComponent(record[config.keyField])}`;
+      actions.appendChild(profileButton);
+    }
     if (config.module === "employees" && currentActions.jobHistoryView) {
       const historyButton = document.createElement("a");
       historyButton.className = "btn btn-secondary";
