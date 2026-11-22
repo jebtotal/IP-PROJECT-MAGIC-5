@@ -383,10 +383,10 @@ by Git.
 
 ## HR query indexes
 
-No additional HR index is proposed in S3-DBA-06. The HR module currently has a
-Department list but no employee or job list. The Department list uses the
-shared record-list API, which fetches rows before applying search in Python, so
-name indexes would not accelerate that search. `get_current_profile` and
+No additional HR index is proposed in S3-DBA-06. The HR module currently has
+Department and Job lists but no employee list. Both lists use the shared
+record-list API, which fetches rows before applying search in Python, so name
+indexes would not accelerate that search. `get_current_profile` and
 user-management record lookups filter `profiles.id`, whose primary key is
 already indexed; the admin user list filters by role and orders by
 `created_at`. Employee, department, and job codes are primary keys; S3-DBA-02
@@ -491,17 +491,18 @@ separate price-history migration adds three price mutation rights, and the
 S2-BLD-01 migration adds the eight guide rights found missing in the checked-in
 catalogue.
 
-Departments, Customers, and Products are available at `/human-resources`,
-`/customers`, and `/products`. Their shared record list provides search,
+Departments and Jobs are available at `/human-resources` and
+`/human-resources/jobs`; Customers and Products are at `/customers` and
+`/products`. The HR lists share a record list that provides search,
 administrator active/inactive/all filters, permission-checked create/edit/
-soft-delete operations, and administrator-only restore. Department create,
-edit, and delete use their HR resource rights; deleting a department with
-active job-history records is refused. Customer deletion is refused while
+soft-delete operations, and administrator-only restore. Department and Job
+mutations use their resource-specific HR rights; deletion is refused while
+active job-history records are linked. Customer deletion is refused while
 `sales_active` contains a linked sale. Admin/Superadmin rows show
 Active/Inactive and a stamp; Users see active rows only. The Department form
-maps to `deptcode` and `deptname`; the Customer form maps to `custno`,
-`custname`, `address`, and `payterm`; the Product form maps to `prodcode`,
-`description`, and `unit`.
+maps to `deptcode` and `deptname`; the Job form maps to `jobcode` and
+`jobdesc`. The Customer form maps to `custno`, `custname`, `address`, and
+`payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
 Product rows link to Price History, which supports dated price creation,
 editing (including the effective date), soft deletion, and administrator
 restore. The Products list displays the latest non-deleted price effective on
@@ -516,10 +517,10 @@ assign them automatically.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
 Department viewing uses the Human Resources View right. Apply
 `20261122000800_s3_dba_07_department_view_access.sql` after
-`20261109000000_hope_app_access.sql` so the department RLS policy matches that
-view permission. If the active view, table access, or policies are unavailable,
-the UI reports that database setup is needed. Sales and Reports currently show
-a Coming soon page.
+`20261109000000_hope_app_access.sql` so the Department and Job RLS policies
+match that view permission. If the active view, table access, or policies are
+unavailable, the UI reports that database setup is needed. Employee
+management, Sales, and Reports currently show a Coming soon page.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

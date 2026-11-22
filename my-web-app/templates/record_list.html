@@ -25,6 +25,21 @@
     </div>
   </section>
 
+  {% if record_config.module_slug in ("departments", "jobs") %}
+    <nav class="record-tabs" aria-label="Human Resources lists">
+      <a
+        class="record-tab{% if record_config.module_slug == 'departments' %} is-active{% endif %}"
+        href="/human-resources"
+        {% if record_config.module_slug == "departments" %}aria-current="page"{% endif %}
+      >Departments</a>
+      <a
+        class="record-tab{% if record_config.module_slug == 'jobs' %} is-active{% endif %}"
+        href="/human-resources/jobs"
+        {% if record_config.module_slug == "jobs" %}aria-current="page"{% endif %}
+      >Jobs</a>
+    </nav>
+  {% endif %}
+
   <section class="management-panel glass-panel record-panel" aria-label="{{ record_config.name }} records">
     <div class="record-toolbar">
       <label class="record-search">

@@ -69,6 +69,36 @@ WORKSPACE_MODULES = (
     {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
 )
 RECORD_MODULES = {
+    "jobs": {
+        "module_slug": "jobs",
+        "name": "Jobs",
+        "singular": "Job",
+        "permission": "Human Resources",
+        "rights_module": "hr",
+        "rights_resource": "jobs",
+        "rights_view_resource": "hr",
+        "table": "job",
+        "active_view": "job_active",
+        "key": "jobcode",
+        "key_field": "jobCode",
+        "display_field": "jobDesc",
+        "fields": (
+            {
+                "name": "jobCode",
+                "column": "jobcode",
+                "label": "Job Code",
+                "maxlength": 4,
+                "required": True,
+            },
+            {
+                "name": "jobDesc",
+                "column": "jobdesc",
+                "label": "Job Description",
+                "maxlength": 20,
+                "required": True,
+            },
+        ),
+    },
     "departments": {
         "module_slug": "departments",
         "name": "Departments",
@@ -582,6 +612,7 @@ def api_check_module_permission(module, action):
 @app.get("/customers")
 @app.get("/products")
 @app.get("/human-resources")
+@app.get("/human-resources/jobs")
 @app.get("/sales")
 @app.get("/reports")
 def module_workspace():
@@ -598,7 +629,8 @@ def module_workspace():
     if must_set_password(client.auth.get_user().user):
         return redirect(url_for("set_password"))
 
-    slug = request.path.strip("/")
+    path_parts = request.path.strip("/").split("/")
+    slug = path_parts[0]
     module = next((item for item in WORKSPACE_MODULES if item["slug"] == slug), None)
     if module is None:
         return redirect(url_for("index"))
@@ -616,7 +648,9 @@ def module_workspace():
         ), 503
 
     allowed = has_permission(permissions, module["permission"], "view")
-    record_slug = "departments" if slug == "human-resources" else slug
+    record_slug = (
+        path_parts[1] if len(path_parts) > 1 else "departments"
+    ) if slug == "human-resources" else slug
     if allowed and record_slug in RECORD_MODULES:
         record_config = RECORD_MODULES[record_slug]
         return render_template(
@@ -1341,6 +1375,14 @@ def api_delete_record(module_slug, record_id):
         ):
             return jsonify(
                 error="This department cannot be deleted while active job history is linked."
+            ), 409
+        if (
+            module_slug == "jobs"
+            and error.code == "P0001"
+            and "Cannot delete job row:" in str(error)
+        ):
+            return jsonify(
+                error="This job cannot be deleted while active job history is linked."
             ), 409
         return record_error_response(error, config)
     except (httpx.HTTPError, RuntimeError) as error:
