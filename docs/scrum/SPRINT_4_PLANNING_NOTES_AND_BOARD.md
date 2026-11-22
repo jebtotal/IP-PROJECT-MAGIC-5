@@ -60,5 +60,6 @@ See the [Sprint 3 velocity and Sprint 4 risk register](SPRINT_3_VELOCITY_AND_SPR
 - [Sprint 1 board and eight-week module plan](SPRINT_1_BOARD_AND_8_WEEK_MODULE_PLAN.md)
 - [Sprint 3 planning notes and board](SPRINT_3_PLANNING_NOTES_AND_BOARD.md)
 - [Sprint 3 velocity and Sprint 4 risk register](SPRINT_3_VELOCITY_AND_SPRINT_4_RISK_REGISTER.md)
+- [Sprint 4 mid-sprint check and impediment log](MID_SPRINT_4_CHECK_AND_IMPEDIMENT_LOG.md)
 - [Team working agreement and Definition of Done](TEAM_WORKING_AGREEMENT_DEFINITION_OF_DONE_ROLE_GUIDE.md)
 
