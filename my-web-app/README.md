@@ -126,6 +126,13 @@ The HOPE schema is split into timestamp-ordered migrations:
   Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
   migrations to test add/edit/soft-delete attribution and the fallback; it
   rolls back test rows.
+- `20261122001500_s1_dba_10_hope_audit_trigger_compat.sql` is a forward-only
+  repair for installations where legacy `*_aiu_audit` triggers from the source
+  HOPE audit migration remain attached to operational tables. Those triggers
+  write columns absent from the application's `audit_log` and cause record
+  inserts to fail. Apply it after `20261109000000_hope_app_access.sql`; it
+  replaces only the ten operational-table audit triggers and does not alter
+  audit-log rows or table columns.
 - `20261110000000_s1_dba_07_price_history_rights.sql` adds the normalized
   price-history mutation rights and keeps the catalogue and HOPE access helper
   consistent with the app's effective-date price-history operations.
