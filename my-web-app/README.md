@@ -384,7 +384,7 @@ by Git.
 ## HR query indexes
 
 No additional HR index is proposed in S3-DBA-06. The HR module has Department,
-Job, and read-only Employee lists. They use the shared record-list API, which
+Job, and Employee lists. They use the shared record-list API, which
 fetches rows before applying search and filters in Python, so name indexes
 would not accelerate that search. `get_current_profile` and
 user-management record lookups filter `profiles.id`, whose primary key is
@@ -392,7 +392,8 @@ already indexed; the admin user list filters by role and orders by
 `created_at`. Employee, department, and job codes are primary keys; S3-DBA-02
 already created the partial unique `jobhistory(empno, effdate) WHERE NOT
 is_deleted` index used by the current employee view. Do not add duplicate or
-speculative indexes. Measure future HR queries with
+speculative indexes. The same index enforces one active Job History record
+per employee and effective date. Measure future HR queries with
 `EXPLAIN (ANALYZE, BUFFERS)` before and after any candidate index.
 
 ## PostgreSQL backup and restore
@@ -498,8 +499,15 @@ that provides search and administrator active/inactive/all filters.
 Employees can additionally be filtered by gender and employment status;
 Current includes employees without a separation date or with a separation
 date on/after today's Asia/Manila date. Employee creation and editing use the
-employee Add/Edit rights; employee numbers cannot be changed after creation,
-and employee deletion is unavailable.
+employee Add/Edit rights; employee numbers cannot be changed after creation.
+Employee separation dates remain editable. Employee deletion uses the
+employee Delete right and is soft-delete only; linked profiles must first be
+unlinked, and active Job History/Sales records prevent deletion. Only
+administrators can restore inactive Employees.
+Employees with Job History View access have a per-employee Job History page
+for effective-dated job/department promotions or transfers and salary. Job
+History Add/Edit/Delete rights control those operations, which soft-delete
+history records and reject duplicate active effective dates.
 Department and Job lists provide permission-checked create/edit/soft-delete
 operations and administrator-only restore. Department and Job mutations use
 their resource-specific HR rights; deletion is refused while active

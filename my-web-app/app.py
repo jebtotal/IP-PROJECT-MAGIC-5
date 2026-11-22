@@ -82,7 +82,7 @@ RECORD_MODULES = {
         "key": "empno",
         "key_field": "empNo",
         "display_field": "lastName",
-        "allowed_actions": ("view", "create", "edit"),
+        "allowed_actions": ("view", "create", "edit", "delete"),
         "filters": (
             {
                 "name": "gender",
@@ -324,6 +324,7 @@ def validate_api_csrf_token():
     protected_paths = (
         request.path.startswith("/api/records/")
         or request.path.startswith("/api/products/")
+        or request.path.startswith("/api/hr/")
         or request.path.startswith("/api/users")
         or request.path in {"/api/logout", "/logout"}
     )
@@ -779,6 +780,240 @@ def module_workspace():
     ), 200 if allowed else 403
 
 
+@app.get("/human-resources/employees/<employee_no>/job-history")
+def employee_job_history(employee_no):
+    client, profile, context, _actions, error = get_employee_job_history_access(
+        employee_no, "view"
+    )
+    if error:
+        if error[1] == 401:
+            return redirect(url_for("login"))
+        if error[1] == 403:
+            return redirect(url_for("index"))
+        return error
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        jobs = (
+            client.table("job_active")
+            .select("jobcode, jobdesc")
+            .order("jobcode")
+            .execute()
+            .data or []
+        )
+        departments = (
+            client.table("department_active")
+            .select("deptcode, deptname")
+            .order("deptcode")
+            .execute()
+            .data or []
+        )
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Job history form options could not be loaded")
+        return jsonify(error="Job History, Job, or Department data needs database setup or could not be loaded."), 503
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    actions = {
+        action: is_admin or JOB_HISTORY_RIGHTS[action] in context["rights"]
+        for action in ("create", "edit", "delete")
+    }
+    return render_template(
+        "job_history.html",
+        profile=profile,
+        employee=context["employee"],
+        jobs=jobs,
+        departments=departments,
+        is_admin=is_admin,
+        actions=actions,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/api/hr/employees/<employee_no>/job-history")
+def api_list_employee_job_history(employee_no):
+    client, profile, context, _actions, error = get_employee_job_history_access(
+        employee_no, "view"
+    )
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    columns = "empno, jobcode, deptcode, effdate, salary"
+    admin_columns = f"{columns}, is_deleted, stamp"
+    try:
+        active_rows = (
+            client.table("jobhistory_active")
+            .select(admin_columns if is_admin else columns)
+            .eq("empno", employee_no)
+            .order("effdate", desc=True)
+            .execute()
+            .data or []
+        )
+        inactive_rows = []
+        if is_admin:
+            inactive_rows = (
+                client.table("jobhistory")
+                .select(admin_columns)
+                .eq("empno", employee_no)
+                .eq("is_deleted", True)
+                .order("effdate", desc=True)
+                .execute()
+                .data or []
+            )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    rows = (
+        active_rows if status_filter == "active"
+        else inactive_rows if status_filter == "inactive"
+        else active_rows + inactive_rows
+    )
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if any(
+                search in str(row.get(column) or "").casefold()
+                for column in ("jobcode", "deptcode", "effdate", "salary")
+            )
+        ]
+    return jsonify(
+        employee={
+            "empNo": context["employee"]["empno"],
+            "name": " ".join(
+                part for part in (
+                    context["employee"].get("firstname"),
+                    context["employee"].get("lastname"),
+                ) if part
+            ),
+        },
+        records=[job_history_response_record(row, is_admin) for row in rows],
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            action: is_admin or JOB_HISTORY_RIGHTS[action] in context["rights"]
+            for action in ("create", "edit", "delete")
+        },
+    )
+
+
+@app.post("/api/hr/employees/<employee_no>/job-history")
+def api_create_employee_job_history(employee_no):
+    client, profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "create"
+    )
+    if error:
+        return error
+    values, validation_error = job_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    relation_error = validate_job_history_relations(client, values)
+    if relation_error:
+        return relation_error
+    values["empno"] = employee_no
+    try:
+        response = client.table("jobhistory").insert(values).execute()
+    except APIError as error:
+        if error.code == "23503":
+            return jsonify(error="Choose an active Job and, if provided, Department."), 400
+        if error.code in {"23505", "P0001"}:
+            return jsonify(error="An active job-history record already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Job History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Job History could not be created."), 502
+    return jsonify(
+        message="Job history added.",
+        record=job_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        ),
+    ), 201
+
+
+@app.patch("/api/hr/employees/<employee_no>/job-history/<effective_date>")
+def api_edit_employee_job_history(employee_no, effective_date):
+    client, profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "edit"
+    )
+    if error:
+        return error
+    if not is_iso_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    values, validation_error = job_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    relation_error = validate_job_history_relations(client, values)
+    if relation_error:
+        return relation_error
+    try:
+        current = (
+            client.table("jobhistory")
+            .select("is_deleted")
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Active job-history record not found."), 404
+        response = (
+            client.table("jobhistory")
+            .update(values)
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code == "23503":
+            return jsonify(error="Choose an active Job and, if provided, Department."), 400
+        if error.code in {"23505", "P0001"}:
+            return jsonify(error="An active job-history record already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Job History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Active job-history record not found."), 404
+    return jsonify(
+        message="Job history updated.",
+        record=job_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        ),
+    )
+
+
+@app.patch("/api/hr/employees/<employee_no>/job-history/<effective_date>/delete")
+def api_delete_employee_job_history(employee_no, effective_date):
+    client, _profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "delete"
+    )
+    if error:
+        return error
+    if not is_iso_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    try:
+        response = (
+            client.table("jobhistory")
+            .update({"is_deleted": True})
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Active job-history record not found."), 404
+    return jsonify(message="Job history moved to Inactive.")
+
+
 @app.get("/user-management")
 def user_management():
     client, profile = get_management_profile()
@@ -954,6 +1189,155 @@ PRICE_HISTORY_RIGHTS = {
     "edit": "products.priceHistory.edit",
     "delete": "products.priceHistory.delete",
 }
+JOB_HISTORY_RIGHTS = {
+    "view": "hr.jobHistory.view",
+    "create": "hr.jobHistory.add",
+    "edit": "hr.jobHistory.edit",
+    "delete": "hr.jobHistory.delete",
+}
+
+
+def get_job_history_rights(client, profile):
+    if profile["role"] in {"admin", "superadmin"}:
+        return set(JOB_HISTORY_RIGHTS.values())
+    assignments = (
+        client.table("user_permission")
+        .select("right_code")
+        .eq("user_id", profile["id"])
+        .eq("is_deleted", False)
+        .in_("right_code", list(JOB_HISTORY_RIGHTS.values()))
+        .execute()
+    )
+    return {row["right_code"] for row in assignments.data or []}
+
+
+def get_employee_job_history_access(employee_no, action):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, None, (jsonify(error="You must be logged in."), 401)
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, None, (jsonify(error="This account is not active."), 403)
+    if action not in JOB_HISTORY_RIGHTS:
+        return None, None, None, None, (jsonify(error="Unknown job history action."), 400)
+    try:
+        employee = (
+            client.table("employee")
+            .select("empno, lastname, firstname, is_deleted")
+            .eq("empno", employee_no)
+            .maybe_single()
+            .execute()
+            .data
+        )
+        if employee is None:
+            return None, None, None, None, (jsonify(error="Employee not found."), 404)
+        rights = get_job_history_rights(client, profile)
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError) as error:
+        app.logger.exception("Job history access could not be checked")
+        return None, None, None, None, (
+            jsonify(error="Job History rights or employee data need database setup or could not be checked."),
+            503,
+        )
+    if JOB_HISTORY_RIGHTS["view"] not in rights:
+        return None, None, None, None, (
+            jsonify(error="Job History view permission is required."),
+            403,
+        )
+    if action != "view" and JOB_HISTORY_RIGHTS[action] not in rights:
+        return None, None, None, None, (
+            jsonify(error=f"Job History {action} permission is required."),
+            403,
+        )
+    if action != "view" and employee.get("is_deleted"):
+        return None, None, None, None, (
+            jsonify(error="Restore this employee before changing job history."),
+            409,
+        )
+    return client, profile, {"employee": employee, "rights": rights}, None, None
+
+
+def job_history_form_values(payload):
+    fields = {"effDate", "jobCode", "deptCode", "salary"}
+    if not isinstance(payload, Mapping) or set(payload) != fields:
+        return None, "Enter an effective date, job, department, and salary."
+    effective_date = payload.get("effDate")
+    if not isinstance(effective_date, str):
+        return None, "Enter a valid effective date."
+    try:
+        parsed_date = date.fromisoformat(effective_date)
+    except ValueError:
+        return None, "Enter a valid effective date."
+    if parsed_date.isoformat() != effective_date:
+        return None, "Enter a valid effective date."
+    job_code = payload.get("jobCode")
+    department_code = payload.get("deptCode")
+    if not isinstance(job_code, str) or not job_code.strip() or len(job_code.strip()) > 4:
+        return None, "Choose a valid job."
+    if not isinstance(department_code, str) or len(department_code.strip()) > 4:
+        return None, "Choose a valid department."
+    raw_salary = payload.get("salary")
+    if not isinstance(raw_salary, str):
+        return None, "Enter a valid salary."
+    try:
+        salary = Decimal(raw_salary)
+    except InvalidOperation:
+        return None, "Enter a valid salary."
+    if (
+        not salary.is_finite()
+        or salary < 0
+        or salary.as_tuple().exponent < -2
+        or salary > Decimal("99999999.99")
+    ):
+        return None, "Salary must be zero or more and have at most 2 decimal places."
+    return {
+        "effdate": parsed_date.isoformat(),
+        "jobcode": job_code.strip(),
+        "deptcode": department_code.strip() or None,
+        "salary": format(salary.quantize(Decimal("0.01")), "f"),
+    }, None
+
+
+def validate_job_history_relations(client, values):
+    try:
+        job = (
+            client.table("job_active")
+            .select("jobcode")
+            .eq("jobcode", values["jobcode"])
+            .maybe_single()
+            .execute()
+        )
+        if job.data is None:
+            return jsonify(error="Choose an active Job."), 400
+        if values["deptcode"]:
+            department = (
+                client.table("department_active")
+                .select("deptcode")
+                .eq("deptcode", values["deptcode"])
+                .maybe_single()
+                .execute()
+            )
+            if department.data is None:
+                return jsonify(error="Choose an active Department."), 400
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        app.logger.exception("Job history Job/Department choices could not be verified")
+        return jsonify(error="Job and Department choices could not be verified."), 503
+    return None
+
+
+def job_history_response_record(row, is_admin):
+    record = {
+        "empNo": row.get("empno"),
+        "jobCode": row.get("jobcode"),
+        "effDate": row.get("effdate"),
+        "salary": row.get("salary"),
+        "deptCode": row.get("deptcode"),
+    }
+    if is_admin:
+        record.update(
+            isDeleted=row.get("is_deleted") is True,
+            stamp=display_stamp(row.get("stamp")),
+        )
+    return record
 
 
 def get_price_history_access(product_code, action):
@@ -1061,7 +1445,7 @@ def price_history_form_values(payload):
     }, None
 
 
-def is_price_history_date(value):
+def is_iso_date(value):
     if not isinstance(value, str):
         return False
     try:
@@ -1204,7 +1588,7 @@ def api_edit_price_history(product_code, effective_date):
     client, profile, _context, error = get_price_history_access(product_code, "edit")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     values, validation_error = price_history_form_values(get_user_payload())
     if validation_error:
@@ -1250,7 +1634,7 @@ def api_delete_price_history(product_code, effective_date):
     client, _profile, _context, error = get_price_history_access(product_code, "delete")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     try:
         response = (
@@ -1273,7 +1657,7 @@ def api_restore_price_history(product_code, effective_date):
     client, profile, _context, error = get_price_history_access(product_code, "delete")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     if profile["role"] not in {"admin", "superadmin"}:
         return jsonify(error="Only administrators can restore inactive price history."), 403
@@ -1385,21 +1769,31 @@ def api_list_records(module_slug):
                 row["prodcode"]: row["unitprice"]
                 for row in (prices.data or [])
             }
-        except (APIError, httpx.HTTPError, RuntimeError):
+        except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
             price_map = {}
         for record in records:
             record["currentPrice"] = price_map.get(record.get("prodCode"))
+    response_actions = {
+        action: (
+            actions[action]
+            and action in config.get("allowed_actions", RIGHTS_ACTIONS)
+        )
+        for action in ("create", "edit", "delete")
+    }
+    if module_slug == "employees":
+        try:
+            history_rights = get_job_history_rights(client, profile)
+        except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+            app.logger.exception("Employee Job History rights could not be loaded")
+            return jsonify(error="Job History permissions need database setup or could not be checked."), 503
+        response_actions["jobHistoryView"] = (
+            JOB_HISTORY_RIGHTS["view"] in history_rights
+        )
     return jsonify(
         records=records,
         counts=counts if is_admin else None,
         is_admin=is_admin,
-        actions={
-            action: (
-                actions[action]
-                and action in config.get("allowed_actions", RIGHTS_ACTIONS)
-            )
-            for action in ("create", "edit", "delete")
-        },
+        actions=response_actions,
     )
 
 
@@ -1508,6 +1902,15 @@ def api_delete_record(module_slug, record_id):
             .execute()
         )
     except APIError as error:
+        if module_slug == "employees" and error.code in {"P0001", "23514"}:
+            if "linked user profile" in str(error).lower():
+                return jsonify(
+                    error="This employee cannot be deleted while a user profile is linked. Unlink the profile first."
+                ), 409
+            if "cannot delete employee" in str(error).lower():
+                return jsonify(
+                    error="This employee cannot be deleted while active Job History or Sales records are linked."
+                ), 409
         if (
             module_slug == "customers"
             and error.code in {"P0001", "23514"}
