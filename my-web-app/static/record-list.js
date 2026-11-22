@@ -60,6 +60,12 @@ function renderHeader() {
     heading.textContent = field.label;
     row.appendChild(heading);
   }
+  if (config.module === "products") {
+    const heading = document.createElement("th");
+    heading.scope = "col";
+    heading.textContent = "Current Price";
+    row.appendChild(heading);
+  }
   if (config.isAdmin) {
     for (const label of ["Status", "Stamp"]) {
       const heading = document.createElement("th");
@@ -82,6 +88,13 @@ function renderRecords(records) {
     if (record.isDeleted) row.classList.add("record-deleted");
     for (const field of config.fields) {
       addCell(row, record[field.name], field.label, String(record[field.name] || ""));
+    }
+    if (config.module === "products") {
+      const currentPrice = record.currentPrice;
+      const priceText = currentPrice
+        ? `${currentPrice.unitPrice} (effective ${currentPrice.effectiveDate})`
+        : "—";
+      addCell(row, priceText, "Current Price");
     }
     if (config.isAdmin) {
       const status = addCell(row, record.isDeleted ? "Inactive" : "Active", "Status");

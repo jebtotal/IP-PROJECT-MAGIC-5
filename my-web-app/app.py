@@ -956,6 +956,23 @@ def api_list_records(module_slug):
             else inactive_rows if status_filter == "inactive"
             else active_rows + inactive_rows
         )
+        current_prices = {}
+        if module_slug == "products":
+            product_codes = list({row["prodcode"] for row in rows})
+            if product_codes:
+                price_response = (
+                    client.table("pricehist_current")
+                    .select("prodcode, effdate, unitprice")
+                    .in_("prodcode", product_codes)
+                    .execute()
+                )
+                current_prices = {
+                    row["prodcode"]: {
+                        "unitPrice": row["unitprice"],
+                        "effectiveDate": row["effdate"],
+                    }
+                    for row in price_response.data or []
+                }
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
 
@@ -971,6 +988,8 @@ def api_list_records(module_slug):
             field["name"]: row.get(field["column"])
             for field in config["fields"]
         }
+        if module_slug == "products":
+            record["currentPrice"] = current_prices.get(row["prodcode"])
         if is_admin:
             record.update(
                 isDeleted=row.get("is_deleted") is True,
@@ -982,15 +1001,13 @@ def api_list_records(module_slug):
     except (APIError, httpx.HTTPError):
         app.logger.exception("Record action permissions could not be loaded")
         return jsonify(error="Module access needs database setup or could not be checked."), 503
-    actions = permissions[config["permission"]]
     return jsonify(
         records=records,
         counts=counts if is_admin else None,
         is_admin=is_admin,
         actions={
-            "create": actions["create"],
-            "edit": actions["edit"],
-            "delete": actions["delete"],
+            action: has_permission(permissions, config["permission"], action)
+            for action in ("create", "edit", "delete")
         },
     )
 
