@@ -62,5 +62,6 @@ See the [Sprint 3 velocity and Sprint 4 risk register](SPRINT_3_VELOCITY_AND_SPR
 - [Sprint 3 velocity and Sprint 4 risk register](SPRINT_3_VELOCITY_AND_SPRINT_4_RISK_REGISTER.md)
 - [Sprint 4 mid-sprint check and impediment log](MID_SPRINT_4_CHECK_AND_IMPEDIMENT_LOG.md)
 - [Sprint 4 release checklist and demo script](SPRINT_4_RELEASE_CHECKLIST_AND_DEMO_SCRIPT.md)
+- [Sprint 4 final review, retrospective, and project report](SPRINT_4_FINAL_REVIEW_RETROSPECTIVE_AND_PROJECT_REPORT.md)
 - [Team working agreement and Definition of Done](TEAM_WORKING_AGREEMENT_DEFINITION_OF_DONE_ROLE_GUIDE.md)
 

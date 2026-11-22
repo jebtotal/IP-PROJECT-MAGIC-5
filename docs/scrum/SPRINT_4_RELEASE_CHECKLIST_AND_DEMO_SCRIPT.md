@@ -8,9 +8,18 @@ The [Sprint 4 mid-sprint check](MID_SPRINT_4_CHECK_AND_IMPEDIMENT_LOG.md) record
 
 ## Current-checkout demo gate
 
-In the checked-out app source, `/sales` and `/reports` are routed to the generic module workspace in [`app.py`](../../my-web-app/app.py), and [`module_workspace.html`](../../my-web-app/templates/module_workspace.html) displays “Coming soon” for available modules. Do not present this checkout as a working Sales or Reports UI demo.
+Sales and Reports routes and templates are present in the checked-out source.
+However, the current focused test command
+`py -m unittest tests.test_sales_reports -v` fails while importing `app.py`:
+Flask reports that the `api_list_sales` endpoint is registered more than once.
+The source also defines `REPORTS` twice, so report rendering still needs a
+successful run after the route-registration issue is resolved.
 
-Before using the feature demo below, verify that the selected candidate branch/build actually contains the Sales, Payments, Reports, and audit-log UI. If those routes still show placeholders, stop the live feature walkthrough. Use the fallback evidence walkthrough at the end and state plainly that the UI flow is not available in that candidate.
+The user reports that the live application is working, but that report does not
+confirm that the running process matches this checkout. Do not present this
+checkout as release-ready or use it for the feature demo until it imports,
+passes the required checks, and the Sales, Payments, Reports, and audit-log
+flows are verified on the exact candidate build.
 
 ## Release checklist
 
@@ -78,9 +87,10 @@ Complete this only after the gates above have been reviewed:
 
 ### Fallback if the feature UI is unavailable
 
-Do not simulate a successful live workflow or describe planned UI as implemented. Instead:
+Do not simulate a successful live workflow. If the selected candidate cannot
+start, fails verification, or still displays placeholders, use this fallback:
 
-1. State that Sales/Reports UI is not available in the selected build.
+1. State exactly which UI or verification gate is unavailable in the selected build.
 2. Show the approved scope and linked implementation evidence from the [Sprint 4 planning notes](SPRINT_4_PLANNING_NOTES_AND_BOARD.md).
 3. Show the database migration and test-script contents as implementation/test assets only; explicitly state whether execution results are available.
 4. End with the remaining release gates and owners from the [mid-sprint impediment log](MID_SPRINT_4_CHECK_AND_IMPEDIMENT_LOG.md).
@@ -89,4 +99,5 @@ Do not simulate a successful live workflow or describe planned UI as implemented
 
 - [Sprint 4 planning notes and board](SPRINT_4_PLANNING_NOTES_AND_BOARD.md)
 - [Sprint 4 mid-sprint check and impediment log](MID_SPRINT_4_CHECK_AND_IMPEDIMENT_LOG.md)
+- [Sprint 4 final review, retrospective, and project report](SPRINT_4_FINAL_REVIEW_RETROSPECTIVE_AND_PROJECT_REPORT.md)
 - [Team working agreement and Definition of Done](TEAM_WORKING_AGREEMENT_DEFINITION_OF_DONE_ROLE_GUIDE.md)
