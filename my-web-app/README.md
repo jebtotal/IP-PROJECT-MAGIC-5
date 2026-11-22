@@ -126,6 +126,19 @@ The HOPE schema is split into timestamp-ordered migrations:
   Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
   migrations to test add/edit/soft-delete attribution and the fallback; it
   rolls back test rows.
+- `20261110000000_s1_dba_07_price_history_rights.sql` adds the normalized
+  price-history mutation rights and keeps the catalogue and HOPE access helper
+  consistent with the app's effective-date price-history operations.
+- `20261122000000_s3_dba_01_employee_current.sql` adds the active-only
+  `v_employee_current` view, selecting each employee's latest non-deleted job
+  history effective on or before today. It keeps employees with no job history
+  and returns NULL job/department fields for them; future changes are ignored.
+  Same-date history ties choose the greatest job code deterministically.
+  Salary is intentionally excluded for the separate S3-DEV-08 permission.
+  `supabase/tests/s3_dba_01_employee_current.sql` tests transfers, a future
+  promotion, employees without history, and soft-deleted employees; it rolls
+  back all test rows.
+
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
