@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Empty, Error and Confirm States - PentadERP</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="../shared/tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="../shared/theme.css">
+</head>
+<body class="min-h-screen">
+  <div class="min-h-screen lg:flex">
+    <aside class="hidden w-64 shrink-0 flex-col bg-slate-950 text-gray-400 lg:flex">
+      <a href="#" class="flex h-20 items-center gap-3 border-b border-gray-800/60 px-6" aria-label="PentadERP dashboard">
+        <span class="pentad-logo h-8 w-8 shrink-0" role="img" aria-label="PentadERP logo"></span>
+        <span class="text-lg font-black text-white">Pentad<span class="text-brand-500">ERP</span></span>
+      </a>
+      <nav class="flex-1 space-y-2 px-4 py-6" aria-label="Main navigation">
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-grid-2 w-4 text-center" aria-hidden="true"></i>Dashboard</a>
+        <a href="#" aria-current="page" class="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 px-4 py-3 text-xs font-bold text-white"><i class="fa-solid fa-address-book w-4 text-center" aria-hidden="true"></i>Customers</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-boxes-stacked w-4 text-center" aria-hidden="true"></i>Products</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-id-card w-4 text-center" aria-hidden="true"></i>Human Resources</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-cart-shopping w-4 text-center" aria-hidden="true"></i>Sales</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-chart-column w-4 text-center" aria-hidden="true"></i>Reports</a>
+        <a href="#" class="flex items-center gap-3 rounded-2xl px-4 py-3 text-xs font-bold hover:bg-slate-900 hover:text-white"><i class="fa-solid fa-users w-4 text-center" aria-hidden="true"></i>User Management</a>
+      </nav>
+      <div class="border-t border-gray-800/60 p-4">
+        <div class="flex items-center gap-3 rounded-2xl border border-gray-800/80 bg-slate-900 p-3">
+          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-sm font-bold text-white" aria-hidden="true">U</span>
+          <div class="min-w-0 flex-1"><p class="truncate text-xs font-bold text-white">Signed-in user</p><p class="text-[10px] font-extrabold uppercase tracking-wider text-brand-500">Superadmin</p></div>
+          <button type="button" class="text-gray-400 hover:text-white" aria-label="Log out"><i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i></button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="flex min-w-0 flex-1 flex-col">
+      <header class="glass-panel flex min-h-20 items-center justify-between gap-4 border-b border-gray-200/50 bg-white/80 px-4 dark:border-gray-800/50 dark:bg-slate-900/80 sm:px-8">
+        <div class="min-w-0"><span class="text-xs font-bold text-gray-500 dark:text-gray-400">PentadERP / WORKSPACE</span></div>
+        <div class="flex shrink-0 items-center gap-3">
+          <span class="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-brand-600 dark:text-brand-400">Superadmin</span>
+          <button type="button" onclick="document.documentElement.classList.toggle('dark')" class="rounded-xl border border-gray-200 p-2.5 text-gray-600 dark:border-gray-800 dark:text-gray-300" aria-label="Toggle light and dark theme" title="Toggle theme"><i class="fa-solid fa-moon dark:hidden" aria-hidden="true"></i><i class="fa-solid fa-sun hidden text-amber-400 dark:block" aria-hidden="true"></i></button>
+        </div>
+      </header>
+
+      <main class="mx-auto w-full max-w-7xl flex-1 p-4 sm:p-6 lg:p-8">
+        <section class="mb-6" aria-labelledby="page-title">
+          <span class="inline-flex items-center gap-2 rounded-full bg-brand-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-brand-600 dark:text-brand-400"><span class="h-1.5 w-1.5 rounded-full bg-brand-500" aria-hidden="true"></span>Customers Module</span>
+          <h1 id="page-title" class="mt-3 text-2xl font-black tracking-tight text-gray-900 dark:text-white sm:text-3xl">Empty, Error and Confirm States</h1>
+          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Reusable state specimens for Customer and Product records.</p>
+        </section>
+
+        <section class="glass-panel mb-6 rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-label="Empty and no-search-match states">
+          <div class="mb-4 flex items-center justify-between gap-3">
+            <h2 class="text-base font-bold text-gray-900 dark:text-white">List states</h2>
+            <span class="rounded-full bg-gray-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 dark:bg-slate-950 dark:text-gray-400">Static mockup</span>
+          </div>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl border border-gray-200/60 p-4 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Empty list</p>
+              <div class="flex min-h-44 flex-col items-center justify-center rounded-xl bg-gray-50 px-6 text-center dark:bg-slate-950">
+                <span class="mb-3 grid h-12 w-12 place-items-center rounded-full bg-brand-500/10 text-brand-600"><i class="fa-solid fa-address-book" aria-hidden="true"></i></span>
+                <h3 class="text-sm font-black text-gray-900 dark:text-white">No customers found</h3>
+                <p class="mt-1 max-w-xs text-xs text-gray-500 dark:text-gray-400">Add your first customer to start managing records.</p>
+                <button type="button" class="mt-4 rounded-full bg-brand-600 px-4 py-2 text-xs font-bold text-white"><i class="fa-solid fa-plus mr-1" aria-hidden="true"></i>Add Customer</button>
+              </div>
+              <p class="mt-2 text-[11px] text-gray-500"><strong>Reusable for Product:</strong> “No products found” / “Add your first product to start managing records.”</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200/60 p-4 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">No search match</p>
+              <div class="flex min-h-44 flex-col items-center justify-center rounded-xl bg-gray-50 px-6 text-center dark:bg-slate-950">
+                <span class="mb-3 grid h-12 w-12 place-items-center rounded-full bg-gray-200/70 text-gray-500 dark:bg-gray-800 dark:text-gray-400"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></span>
+                <h3 class="text-sm font-black text-gray-900 dark:text-white">No matching records</h3>
+                <p class="mt-1 max-w-xs text-xs text-gray-500 dark:text-gray-400">Try a different search term or clear the search.</p>
+                <button type="button" class="mt-4 rounded-full border border-gray-300 px-4 py-2 text-xs font-bold text-gray-700 dark:border-gray-700 dark:text-gray-300">Clear search</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-panel mb-6 rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-label="Validation and save error states">
+          <h2 class="mb-4 text-base font-bold text-gray-900 dark:text-white">Form errors</h2>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl border border-gray-200/60 p-5 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Invalid-input style <span class="text-amber-500">[PROPOSED]</span></p>
+              <form>
+                <label for="customer-name" class="mb-1 block text-[10px] font-bold uppercase tracking-wider text-gray-400">Customer Name</label>
+                <input id="customer-name" type="text" value="" aria-invalid="true" aria-describedby="customer-name-error" class="w-full rounded-xl border-2 border-red-500 bg-white/50 px-4 py-2.5 text-xs text-gray-900 outline-none focus:ring-2 focus:ring-red-500 dark:bg-slate-950/50 dark:text-white">
+                <p id="customer-name-error" class="mt-2 flex items-center gap-2 text-xs font-bold text-red-600" role="alert" aria-live="assertive"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>Customer name is required.</p>
+              </form>
+            </div>
+            <div class="rounded-2xl border border-gray-200/60 p-5 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Save error</p>
+              <div class="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-700 dark:text-red-400" role="alert" aria-live="assertive">
+                <i class="fa-solid fa-circle-exclamation mr-2" aria-hidden="true"></i>The customer could not be saved. Please try again.
+              </div>
+              <p class="mt-3 text-[11px] text-gray-500">Also reusable: “The product could not be saved. Please try again.”</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-panel mb-6 rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-label="Confirmation states">
+          <h2 class="mb-4 text-base font-bold text-gray-900 dark:text-white">Confirm actions</h2>
+          <div class="grid gap-5 xl:grid-cols-3">
+            <div>
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Confirm delete</p>
+              <div class="modal-overlay active !static !visible !opacity-100 !p-0">
+                <section class="modal-content glass-panel relative w-full rounded-3xl bg-white p-7 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="delete-title" aria-describedby="delete-description">
+                  <div class="mb-4 grid h-11 w-11 place-items-center rounded-full bg-amber-500/10 text-amber-500"><i class="fa-solid fa-triangle-exclamation text-lg" aria-hidden="true"></i></div>
+                  <h3 id="delete-title" class="text-xl font-black text-gray-900 dark:text-white">Please confirm</h3>
+                  <p id="delete-description" class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">Move Acme Corporation to Inactive?</p>
+                  <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" class="rounded-full border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Cancel</button>
+                    <button type="button" class="rounded-full bg-red-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-red-700">Confirm</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div>
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Blocked delete <span class="text-amber-500">S2-DBA-04 / guide 4.3</span></p>
+              <div class="modal-overlay active !static !visible !opacity-100 !p-0">
+                <section class="modal-content glass-panel relative w-full rounded-3xl bg-white p-7 dark:bg-slate-900" role="alertdialog" aria-modal="true" aria-labelledby="blocked-title" aria-describedby="blocked-description">
+                  <div class="mb-4 grid h-11 w-11 place-items-center rounded-full bg-amber-500/10 text-amber-500"><i class="fa-solid fa-ban text-lg" aria-hidden="true"></i></div>
+                  <h3 id="blocked-title" class="text-xl font-black text-gray-900 dark:text-white">Cannot delete record</h3>
+                  <p id="blocked-description" class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">Acme Corporation is still referenced by active sales records. It cannot be deleted.</p>
+                  <div class="mt-6 flex justify-end">
+                    <button type="button" class="rounded-full border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Close</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+
+            <div>
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Confirm restore</p>
+              <div class="modal-overlay active !static !visible !opacity-100 !p-0">
+                <section class="modal-content glass-panel relative w-full rounded-3xl bg-white p-7 dark:bg-slate-900" role="dialog" aria-modal="true" aria-labelledby="restore-title" aria-describedby="restore-description">
+                  <div class="mb-4 grid h-11 w-11 place-items-center rounded-full bg-brand-500/10 text-brand-600"><i class="fa-solid fa-rotate-left text-lg" aria-hidden="true"></i></div>
+                  <h3 id="restore-title" class="text-xl font-black text-gray-900 dark:text-white">Restore customer?</h3>
+                  <p id="restore-description" class="mt-2 text-sm leading-6 text-gray-500 dark:text-gray-400">Acme Corporation will return to Active.</p>
+                  <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" class="rounded-full border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Cancel</button>
+                    <button type="button" class="rounded-full bg-brand-600 px-4 py-2.5 text-xs font-bold text-white">Restore</button>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="glass-panel mb-6 rounded-3xl bg-white/80 p-4 dark:bg-slate-900/80 sm:p-6" aria-label="Toast and coming soon states">
+          <h2 class="mb-4 text-base font-bold text-gray-900 dark:text-white">Feedback states</h2>
+          <div class="grid gap-4 lg:grid-cols-2">
+            <div class="rounded-2xl border border-gray-200/60 p-5 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Success toast</p>
+              <div class="rounded-2xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white shadow-lg" role="status" aria-live="polite">
+                <i class="fa-solid fa-circle-check mr-2" aria-hidden="true"></i>Customer saved successfully.
+              </div>
+              <p class="mt-3 text-[11px] text-gray-500">Reusable success messages: “Customer moved to Inactive.” / “Customer restored successfully.” / “Product saved successfully.”</p>
+            </div>
+            <div class="rounded-2xl border border-gray-200/60 p-5 dark:border-gray-800/60">
+              <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-gray-400">Polished coming soon state <span class="text-amber-500">Not built yet</span></p>
+              <div class="flex min-h-52 flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 px-6 text-center dark:border-gray-700">
+                <span class="mb-4 grid h-14 w-14 place-items-center rounded-full bg-brand-500/10 text-brand-600"><i class="fa-solid fa-boxes-stacked text-xl" aria-hidden="true"></i></span>
+                <h3 class="text-base font-black text-gray-900 dark:text-white">Products</h3>
+                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Coming soon. This module is not available yet.</p>
+                <button type="button" class="mt-5 rounded-full border border-gray-200 px-4 py-2.5 text-xs font-bold text-gray-700 dark:border-gray-800 dark:text-gray-300">Back to workspace</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-800 dark:text-amber-300" role="note">
+          <strong>Source status:</strong> Customer and Product list/form patterns are shown as reusable states. Product, deleted-view handling, and this state screen are <strong>not built yet</strong> unless the built app has implemented them.
+        </aside>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
