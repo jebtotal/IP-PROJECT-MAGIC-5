@@ -1095,6 +1095,21 @@ def api_list_records(module_slug):
         record_response_record(row, config, is_admin)
         for row in rows
     ]
+    if module_slug == "products":
+        try:
+            prices = (
+                client.table("v_product_current_price")
+                .select("prodcode, unitprice")
+                .execute()
+            )
+            price_map = {
+                row["prodcode"]: row["unitprice"]
+                for row in (prices.data or [])
+            }
+        except (APIError, httpx.HTTPError, RuntimeError):
+            price_map = {}
+        for record in records:
+            record["currentPrice"] = price_map.get(record.get("prodCode"))
     try:
         permissions = get_permissions_for_user(client, profile)
     except (APIError, httpx.HTTPError):
@@ -1188,6 +1203,27 @@ def api_delete_record(module_slug, record_id):
             if sales_check.data is True:
                 return jsonify(
                     error="This customer cannot be deleted while active sales are linked."
+                ), 409
+        if module_slug == "products":
+            active_prices = (
+                client.table("pricehist_active")
+                .select("prodcode")
+                .eq("prodcode", record_id)
+                .execute()
+            )
+            if active_prices.data:
+                return jsonify(
+                    error="This product cannot be deleted while active prices are linked."
+                ), 409
+            active_sales = (
+                client.table("salesdetail_active")
+                .select("prodcode")
+                .eq("prodcode", record_id)
+                .execute()
+            )
+            if active_sales.data:
+                return jsonify(
+                    error="This product cannot be deleted while active sale lines are linked."
                 ), 409
         response = (
             client.table(config["table"])

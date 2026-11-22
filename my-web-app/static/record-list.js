@@ -68,6 +68,12 @@ function renderHeader() {
     heading.textContent = field.label;
     row.appendChild(heading);
   }
+  if (config.module === "products") {
+    const heading = document.createElement("th");
+    heading.scope = "col";
+    heading.textContent = "Current Price";
+    row.appendChild(heading);
+  }
   if (config.isAdmin) {
     for (const label of ["Status", "Stamp"]) {
       const heading = document.createElement("th");
@@ -90,6 +96,16 @@ function renderRecords(records) {
     if (record.isDeleted) row.classList.add("record-deleted");
     for (const field of config.fields) {
       addCell(row, record[field.name], field.label, String(record[field.name] || ""));
+    }
+    if (config.module === "products") {
+      const priceCell = document.createElement("td");
+      priceCell.dataset.label = "Current Price";
+      const currentPrice = record.currentPrice;
+      priceCell.textContent =
+        currentPrice !== undefined && currentPrice !== null && currentPrice !== ""
+          ? `${parseFloat(currentPrice).toFixed(2)}`
+          : "\u2014";
+      row.appendChild(priceCell);
     }
     if (config.isAdmin) {
       const statusCell = document.createElement("td");
