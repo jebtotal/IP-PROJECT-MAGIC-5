@@ -1,16 +1,15 @@
 
-
+import base64
+import json
+import hmac
 import os
 import secrets
 import smtplib
-import hmac
-import base64
-import json
 import time
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
-from collections.abc import Mapping
 
 import httpx
 from dotenv import load_dotenv
@@ -525,9 +524,12 @@ def access_token_expiry_hint(access_token):
         payload_bytes = base64.urlsafe_b64decode(
             payload_segment + "=" * (-len(payload_segment) % 4)
         )
-        expires_at = json.loads(payload_bytes).get("exp")
+        payload = json.loads(payload_bytes)
     except (IndexError, TypeError, ValueError, UnicodeDecodeError):
         return None
+    if not isinstance(payload, dict):
+        return None
+    expires_at = payload.get("exp")
     if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
         return None
     return expires_at

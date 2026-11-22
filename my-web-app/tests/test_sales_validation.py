@@ -391,6 +391,9 @@ class SupabaseSessionRefreshTests(unittest.TestCase):
             "malformed",
             "header.e30.signature",
             "header."
+            + base64.urlsafe_b64encode(b"[]").decode().rstrip("=")
+            + ".signature",
+            "header."
             + base64.urlsafe_b64encode(b'{"exp":true}').decode().rstrip("=")
             + ".signature",
             "header."
