@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% set page_title = "Job History" %}
+{% block title %}Job History | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.jobHistoryConfig = {
+      employeeNo: {{ employee.empno|tojson }},
+      isAdmin: {{ "true" if is_admin else "false" }},
+      actions: {{ actions|tojson }},
+      jobs: {{ jobs|tojson }},
+      departments: {{ departments|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='job-history.js', v='1') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> HUMAN RESOURCES MODULE</span>
+      <h2>Job History</h2>
+      <p>{{ employee.empno }} · {{ employee.firstname or "" }} {{ employee.lastname or "" }}</p>
+    </div>
+  </section>
+
+  <nav class="record-tabs" aria-label="Human Resources lists">
+    <a class="record-tab" href="/human-resources">Departments</a>
+    <a class="record-tab" href="/human-resources/jobs">Jobs</a>
+    <a class="record-tab" href="/human-resources/employees">Employees</a>
+  </nav>
+
+  <section class="management-panel glass-panel record-panel" aria-label="Employee job history">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search job history</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="history-search" type="search" placeholder="Search date, job, department, or salary..." autocomplete="off">
+      </label>
+      <button id="history-add" type="button" class="btn btn-primary" {% if not actions.create %}hidden{% endif %}>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add job history
+      </button>
+    </div>
+
+    {% if is_admin %}
+      <div id="history-tabs" class="record-tabs" role="tablist" aria-label="Job history status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
+    {% endif %}
+
+    <p id="history-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table record-table">
+        <thead>
+          <tr>
+            <th scope="col">Effective Date</th>
+            <th scope="col">Job</th>
+            <th scope="col">Department</th>
+            <th scope="col">Salary</th>
+            {% if is_admin %}
+              <th scope="col">Status</th>
+              <th scope="col">Stamp</th>
+            {% endif %}
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="auth-footer"><a href="/human-resources/employees">Back to Employees</a></p>
+
+  <dialog id="history-dialog" class="app-dialog" aria-labelledby="history-dialog-title">
+    <form id="history-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">EMPLOYEE JOB HISTORY</span>
+          <h2 id="history-dialog-title" class="dialog-title">Add job history</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="history-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="form-grid">
+        <label class="record-field">
+          Effective Date
+          <input id="history-effective-date" name="effDate" type="date" required>
+        </label>
+        <label class="record-field">
+          Job
+          <select id="history-job" name="jobCode" required>
+            <option value="">Choose job...</option>
+            {% for job in jobs %}
+              <option value="{{ job.jobcode }}">{{ job.jobcode }} · {{ job.jobdesc or "Unnamed job" }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="record-field">
+          Department
+          <select id="history-department" name="deptCode">
+            <option value="">No department</option>
+            {% for department in departments %}
+              <option value="{{ department.deptcode }}">{{ department.deptcode }} · {{ department.deptname or "Unnamed department" }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="record-field">
+          Salary
+          <input id="history-salary" name="salary" type="number" min="0" max="99999999.99" step="0.01" inputmode="decimal" required>
+        </label>
+      </div>
+      <p id="history-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="history-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="history-save" class="btn btn-primary">Add job history</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}

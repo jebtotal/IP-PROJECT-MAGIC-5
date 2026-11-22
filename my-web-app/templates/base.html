@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="PentadERP web application">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='erp-logo.png') }}">
     <title>{% block title %}PentadERP{% endblock %}</title>
     <script>
@@ -70,7 +71,7 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     >
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='7') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v='15') }}">
     {% block head_scripts %}{% endblock %}
   </head>
   <body class="min-h-screen flex flex-col selection:bg-brand-500 selection:text-white">
@@ -104,6 +105,17 @@
               <i class="fa-solid fa-grid-2" aria-hidden="true"></i>
               <span>Dashboard</span>
             </a>
+            {% for module in sidebar_modules|default([]) %}
+              <a
+                href="{{ '/' ~ module.slug }}"
+                class="sidebar-link{% if request.path == ('/' ~ module.slug) or (module.slug == 'human-resources' and request.path.startswith('/human-resources/')) %} is-active{% endif %}"
+                aria-label="{{ module.name }}"
+                title="{{ module.name }}"
+              >
+                <i class="fa-solid {{ module.icon }}" aria-hidden="true"></i>
+                <span>{{ module.name }}{% if module.name in ("Customer", "Product") %}s{% endif %}</span>
+              </a>
+            {% endfor %}
             {% if profile.role in ("admin", "superadmin") %}
               <a
                 href="{{ url_for('user_management') }}"
@@ -113,6 +125,17 @@
               >
                 <i class="fa-solid fa-users" aria-hidden="true"></i>
                 <span>User Management</span>
+              </a>
+            {% endif %}
+            {% if profile.role == "superadmin" %}
+              <a
+                href="{{ url_for('audit_log_viewer') }}"
+                class="sidebar-link{% if request.endpoint == 'audit_log_viewer' %} is-active{% endif %}"
+                aria-label="Audit Log"
+                title="Audit Log"
+              >
+                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                <span>Audit Log</span>
               </a>
             {% endif %}
           </nav>
@@ -125,6 +148,7 @@
               <span>{{ profile.email }}</span>
             </div>
             <form action="{{ url_for('logout') }}" method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
               <button type="submit" class="icon-button logout-button" aria-label="Log out" title="Log out">
                 <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
               </button>

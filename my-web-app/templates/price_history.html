@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% set page_title = "Price History" %}
+{% block title %}Price History | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.priceHistoryConfig = {
+      productCode: {{ product.prodcode|tojson }},
+      productName: {{ product.description|tojson }},
+      productUnit: {{ product.unit|tojson }},
+      isAdmin: {{ "true" if is_admin else "false" }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='price-history.js', v='2') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> PRODUCT MODULE</span>
+      <h2>Price History</h2>
+      <p>{{ product.prodcode }} · {{ product.description or "Unnamed product" }}{% if product.unit %} · {{ product.unit }}{% endif %}</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel record-panel" aria-label="Price history records">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search price history</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="price-search" type="search" placeholder="Search effective date or price..." autocomplete="off">
+      </label>
+      <button id="price-add" type="button" class="btn btn-primary" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add price
+      </button>
+    </div>
+
+    {% if is_admin %}
+      <div id="price-tabs" class="record-tabs" role="tablist" aria-label="Price history status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
+    {% endif %}
+
+    <p id="prices-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table record-table price-history-table">
+        <thead>
+          <tr>
+            <th scope="col">Effective Date</th>
+            <th scope="col">Unit Price</th>
+            {% if is_admin %}
+              <th scope="col">Status</th>
+              <th scope="col">Stamp Log</th>
+            {% endif %}
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="prices-body"></tbody>
+      </table>
+    </div>
+  </section>
+  <p class="auth-footer">
+    <a href="/products">Back to Products</a>
+  </p>
+
+  <dialog id="price-dialog" class="app-dialog" aria-labelledby="price-dialog-title">
+    <form id="price-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">PRICE DETAILS</span>
+          <h2 id="price-dialog-title" class="dialog-title">Add price</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="price-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <label class="record-field">
+        Effective Date
+        <input id="price-effective-date" name="effDate" type="date" required>
+      </label>
+      <label class="record-field">
+        Unit Price
+        <input id="price-unit-price" name="unitPrice" type="number" min="0.01" max="99999999.99" step="0.01" inputmode="decimal" required>
+      </label>
+      <p id="price-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="price-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="price-save" class="btn btn-primary">Add price</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}
