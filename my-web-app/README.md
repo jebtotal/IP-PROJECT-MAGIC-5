@@ -291,6 +291,27 @@ The HOPE schema is split into timestamp-ordered migrations:
   employees remain visible and soft-deleted employees do not. Run the seed
   twice, then the test script, to verify idempotency and expected HR cases.
 
+- `supabase/seeds/s2_dba_05_customer_product_demo_data.sql` adds clearly
+  synthetic Customer, Product, and Price History fixtures with reserved demo
+  keys `ZC501`-`ZC504` and `ZP5001`-`ZP5004`. It uses only example addresses,
+  fake buyer names, and demo descriptions; no emails or real contacts.
+  Payment terms use `COD`, `30D`, and `45D`; product units use `pc`, `mtr`,
+  `ea`, and `pkg`, all allowed by S2-DBA-03. Each of the four demo products
+  has four effective dates, including `2099-01-01`; the final product and
+  its price rows are soft-deleted, as is Customer `ZC504`. Seed inserts use
+  `ON CONFLICT DO NOTHING`, then validate exact fixture values/counts and
+  abort the transaction on reserved-key conflicts. An approved admin or
+  superadmin profile is required for the soft-delete triggers.
+  Apply after the active views, `price_as_of`, and validation constraints.
+  To verify reruns, apply the seed twice in a scratch database, then run
+  `supabase/tests/s2_dba_05_customer_product_demo_data.sql`. The read-only
+  script checks exact base/active/deleted counts, four price rows per product,
+  current/future price results, and visibility through `customer_active`,
+  `product_active`, `pricehist_active`, and `v_product_current_price`.
+  The test also prints row counts and example query results; it does not
+  modify the database. Database execution is still required to produce live
+  output.
+
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
 `20261108000100_hope_operational_tables_preserve_audit.sql` followed by the
