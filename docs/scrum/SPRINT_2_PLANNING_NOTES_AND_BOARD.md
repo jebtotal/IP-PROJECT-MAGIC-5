@@ -47,3 +47,4 @@ Deliver the Customer and Product workflows, including effective-dated price hist
 - [Sprint 1 review and retrospective](SPRINT_1_REVIEW_AND_RETROSPECTIVE_REPORT.md)
 - [Sprint 1 retrospective action follow-up](SPRINT_2_RETRO_ACTION_FOLLOW_UP.md)
 - [Sprint 2 mid-sprint check and impediment log](MID_SPRINT_2_CHECK_AND_IMPEDIMENT_LOG.md)
+- [Sprint 2 velocity and burndown](SPRINT_2_VELOCITY_AND_BURNDOWN.md)
