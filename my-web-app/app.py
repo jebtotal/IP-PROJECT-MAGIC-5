@@ -259,12 +259,16 @@ def validate_permissions(value):
 def write_audit_log(admin_client, actor_id, target_user_id, old_rights, new_rights):
     admin_client.table("audit_log").insert(
         {
-            "table_name": "user_permission",
-            "action": "EDIT",
-            "record_key": str(target_user_id),
-            "old_values": {"rights": sorted(old_rights)},
-            "new_values": {"rights": sorted(new_rights)},
-            "action_by": str(actor_id),
+            "actor_id": str(actor_id),
+            "event_type": "user_permission.EDIT",
+            "old_values": {
+                "user_id": str(target_user_id),
+                "rights": sorted(old_rights),
+            },
+            "new_values": {
+                "user_id": str(target_user_id),
+                "rights": sorted(new_rights),
+            },
         }
     ).execute()
 
@@ -354,6 +358,33 @@ def permissions_to_rights(catalog, permissions):
         if permissions[module].get(permission_action) is True:
             selected.append(right["right_code"])
     return selected
+
+
+def legacy_right_catalog():
+    module_codes = {
+        "Customer": "customers",
+        "Product": "products",
+        "Human Resources": "hr",
+        "Sales": "sales",
+        "Reports": "reports",
+    }
+    return [
+        {
+            "right_code": f"{module_code}.{'add' if action == 'create' else action}",
+            "module_code": module_code,
+            "resource_code": module_code,
+            "action": "add" if action == "create" else action,
+        }
+        for module, module_code in module_codes.items()
+        for action in RIGHTS_ACTIONS
+    ]
+
+
+def is_missing_rights_table(error):
+    return error.code == "PGRST205" and any(
+        f"public.{table}" in str(error)
+        for table in ("right_catalog", "user_permission")
+    )
 
 
 def has_permission(permissions, module, action):
@@ -1344,16 +1375,38 @@ def api_get_user_permissions(user_id):
         if get_rights_target(profile, user_id) is None:
             return jsonify(error="User not found."), 404
         admin_client = get_admin_client()
-        catalog_response = admin_client.table("right_catalog").select(
-            "right_code, module_code, resource_code, action"
-        ).execute()
-        assignment_response = (
-            admin_client.table("user_permission")
-            .select("right_code")
-            .eq("user_id", user_id)
-            .eq("is_deleted", False)
-            .execute()
-        )
+        try:
+            catalog_response = admin_client.table("right_catalog").select(
+                "right_code, module_code, resource_code, action"
+            ).execute()
+            assignment_response = (
+                admin_client.table("user_permission")
+                .select("right_code")
+                .eq("user_id", user_id)
+                .eq("is_deleted", False)
+                .execute()
+            )
+        except APIError as error:
+            if not is_missing_rights_table(error):
+                raise
+            catalog = legacy_right_catalog()
+            legacy = (
+                admin_client.table("user_permissions")
+                .select("permissions")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            )
+            legacy_data = legacy.data if legacy is not None else None
+            legacy_permissions = (
+                validate_permissions(legacy_data["permissions"]) if legacy_data else None
+            )
+            selected = (
+                permissions_to_rights(catalog, legacy_permissions)
+                if legacy_permissions
+                else []
+            )
+            return jsonify(catalog=catalog, selected=selected)
     except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User permissions could not be loaded")
         return jsonify(error="Rights catalogue needs database setup or could not be loaded."), 503
@@ -1397,38 +1450,66 @@ def api_update_user_permissions(user_id):
         if target is None:
             return jsonify(error="User not found."), 404
         admin_client = get_admin_client()
-        catalog_response = admin_client.table("right_catalog").select(
-            "right_code, module_code, resource_code, action"
-        ).execute()
-        catalog = catalog_response.data or []
+        legacy_mode = False
+        try:
+            catalog_response = admin_client.table("right_catalog").select(
+                "right_code, module_code, resource_code, action"
+            ).execute()
+            catalog = catalog_response.data or []
+            current = admin_client.table("user_permission").select(
+                "right_code, is_deleted"
+            ).eq("user_id", user_id).execute()
+        except APIError as error:
+            if not is_missing_rights_table(error):
+                raise
+            catalog = legacy_right_catalog()
+            legacy = (
+                admin_client.table("user_permissions")
+                .select("permissions")
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute()
+            )
+            legacy_data = legacy.data if legacy is not None else None
+            legacy_permissions = (
+                validate_permissions(legacy_data["permissions"]) if legacy_data else None
+            )
+            active_rights = (
+                set(permissions_to_rights(catalog, legacy_permissions))
+                if legacy_permissions
+                else set()
+            )
+            legacy_mode = True
         known_rights = {right["right_code"] for right in catalog}
         if not set(selected).issubset(known_rights):
             return jsonify(error="Rights include entries not in the database catalogue."), 400
-        current = admin_client.table("user_permission").select(
-            "right_code, is_deleted"
-        ).eq("user_id", user_id).execute()
-        active_rights = {
-            row["right_code"] for row in current.data or [] if not row["is_deleted"]
-        }
-        to_soft_delete = active_rights.difference(selected)
-        if to_soft_delete:
-            admin_client.table("user_permission").update(
-                {"is_deleted": True}
-            ).eq("user_id", user_id).in_("right_code", list(to_soft_delete)).execute()
-        if selected:
-            admin_client.table("user_permission").upsert(
-                [
-                    {"user_id": user_id, "right_code": right_code, "is_deleted": False}
-                    for right_code in selected
-                ]
-            ).execute()
-        # Keep the original JSON contract synchronized for deployments that still read it.
         permissions = rights_to_permissions(
             catalog, [{"right_code": right_code} for right_code in selected]
         )
-        admin_client.table("user_permissions").upsert(
-            {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
-        ).execute()
+        if legacy_mode:
+            admin_client.table("user_permissions").upsert(
+                {"user_id": user_id, "permissions": permissions}
+            ).execute()
+        else:
+            active_rights = {
+                row["right_code"] for row in current.data or [] if not row["is_deleted"]
+            }
+            to_soft_delete = active_rights.difference(selected)
+            if to_soft_delete:
+                admin_client.table("user_permission").update(
+                    {"is_deleted": True}
+                ).eq("user_id", user_id).in_("right_code", list(to_soft_delete)).execute()
+            if selected:
+                admin_client.table("user_permission").upsert(
+                    [
+                        {"user_id": user_id, "right_code": right_code, "is_deleted": False}
+                        for right_code in selected
+                    ]
+                ).execute()
+            # Keep the original JSON contract synchronized for deployments that still read it.
+            admin_client.table("user_permissions").upsert(
+                {"user_id": user_id, "permissions": permissions, "updated_by": profile["id"]}
+            ).execute()
         write_audit_log(admin_client, profile["id"], user_id, active_rights, selected)
     except (RuntimeError, APIError, httpx.HTTPError):
         app.logger.exception("User permissions update failed")
