@@ -511,6 +511,9 @@ dialog { color: var(--text-main); }
 .record-toolbar { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.9rem; }
 .record-search { display: flex; width: min(100%, 28rem); min-width: 0; align-items: center; gap: 0.65rem; padding: 0 0.85rem; border: 1px solid var(--border-color); border-radius: 9999px; background: var(--bg-main); color: var(--text-muted); }
 .record-search input { width: 100%; min-width: 0; min-height: 2.7rem; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 0.78rem; }
+.record-filters { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+.record-filter { display: grid; gap: 0.2rem; color: var(--text-muted); font-size: 0.62rem; font-weight: 800; }
+.record-filter select { min-height: 2.7rem; padding: 0.4rem 0.65rem; border: 1px solid var(--border-color); border-radius: 0.7rem; background: var(--bg-main); color: var(--text-main); font-size: 0.72rem; }
 .record-tabs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 0.85rem; }
 .record-tab { display: inline-flex; min-height: 2.2rem; align-items: center; gap: 0.45rem; padding: 0.45rem 0.8rem; border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); font-size: 0.68rem; font-weight: 800; }
 .record-tabs a { text-decoration: none; }

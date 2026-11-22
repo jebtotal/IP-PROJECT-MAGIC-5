@@ -11,6 +11,7 @@ const recordFormError = document.querySelector("#record-form-error");
 const recordTitle = document.querySelector("#record-dialog-title");
 const recordSave = document.querySelector("#record-save");
 const recordTabs = document.querySelector("#record-tabs");
+const recordFilters = document.querySelector("#record-filters");
 let currentStatus = "active";
 let currentActions = {create: false, edit: false, delete: false};
 let editingRecord = null;
@@ -164,6 +165,9 @@ async function loadRecords() {
     status: config.isAdmin ? currentStatus : "active",
     search: searchInput.value.trim(),
   });
+  recordFilters?.querySelectorAll("[data-record-filter]").forEach((filter) => {
+    params.set(filter.dataset.recordFilter, filter.value);
+  });
   try {
     const result = await request(`/api/records/${config.module}?${params}`);
     currentActions = result.actions;
@@ -193,14 +197,14 @@ function buildFields() {
       input.appendChild(prompt);
       for (const option of field.options) {
         const item = document.createElement("option");
-        item.value = option;
-        item.textContent = option;
+        item.value = typeof option === "string" ? option : option.value;
+        item.textContent = typeof option === "string" ? option : option.label;
         input.appendChild(item);
       }
     } else {
       input = document.createElement("input");
-      input.type = "text";
-      input.maxLength = field.maxlength;
+      input.type = field.type || "text";
+      if (input.type === "text") input.maxLength = field.maxlength;
     }
     input.name = field.name;
     input.required = field.required;
@@ -292,6 +296,7 @@ searchInput.addEventListener("input", () => {
   window.clearTimeout(searchTimer);
   searchTimer = window.setTimeout(loadRecords, 180);
 });
+recordFilters?.addEventListener("change", loadRecords);
 recordTabs?.addEventListener("click", (event) => {
   const tab = event.target.closest("[data-status]");
   if (!tab) return;
