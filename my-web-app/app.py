@@ -4,6 +4,9 @@ import os
 import secrets
 import smtplib
 import hmac
+import base64
+import json
+import time
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
@@ -16,6 +19,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from postgrest.exceptions import APIError
 from supabase import create_client
 from supabase_auth.errors import AuthError, AuthRetryableError
+from werkzeug.exceptions import HTTPException, InternalServerError
 
 load_dotenv()
 
@@ -31,6 +35,56 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY") or secrets.token_urlsafe(32)
 reset_token_serializer = URLSafeTimedSerializer(app.secret_key)
 MANILA_TIMEZONE = timezone(timedelta(hours=8))
 RESET_TOKEN_MAX_AGE = 3600
+
+
+@app.errorhandler(HTTPException)
+def handle_api_http_error(error):
+    if request.path.startswith("/api/"):
+        return jsonify(error=error.description), error.code
+    return error.get_response()
+
+
+def temporary_service_error(message):
+    if request.path.startswith("/api/"):
+        return jsonify(error=message), 503
+    return render_template(
+        "service_unavailable.html",
+        message=message,
+        retry_url=request.full_path,
+    ), 503
+
+
+@app.errorhandler(AuthRetryableError)
+def handle_temporary_auth_error(_error):
+    app.logger.warning("Supabase Auth is temporarily unavailable", exc_info=True)
+    return temporary_service_error(
+        "The sign-in service is temporarily unavailable. Your session has not been cleared; please try again shortly."
+    )
+
+
+@app.errorhandler(httpx.HTTPError)
+def handle_temporary_supabase_http_error(_error):
+    app.logger.warning("A Supabase HTTP request failed temporarily", exc_info=True)
+    return temporary_service_error(
+        "A required service is temporarily unavailable. Your session has not been cleared; please try again shortly."
+    )
+
+
+@app.errorhandler(Exception)
+def handle_unexpected_api_error(error):
+    if request.path.startswith("/api/"):
+        app.logger.exception(
+            "Unhandled API request failed: %s %s",
+            request.method,
+            request.path,
+        )
+        return jsonify(
+            error="The server could not complete this request. Try again, and contact an administrator if it continues."
+        ), 500
+    app.logger.exception("Unhandled server request failed")
+    return InternalServerError().get_response()
+
+
 RIGHTS_MODULES = (
     "Customer",
     "Product",
@@ -465,6 +519,20 @@ def get_reset_user(email):
     return next((user for user in users if user.email == email), None)
 
 
+def access_token_expiry_hint(access_token):
+    try:
+        payload_segment = access_token.split(".")[1]
+        payload_bytes = base64.urlsafe_b64decode(
+            payload_segment + "=" * (-len(payload_segment) % 4)
+        )
+        expires_at = json.loads(payload_bytes).get("exp")
+    except (IndexError, TypeError, ValueError, UnicodeDecodeError):
+        return None
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+        return None
+    return expires_at
+
+
 def get_authenticated_client():
     access_token = session.get("access_token")
     refresh_token = session.get("refresh_token")
@@ -472,23 +540,51 @@ def get_authenticated_client():
         return None
 
     client = get_supabase_client()
+    expires_at = session.get("access_token_expires_at")
+    if not isinstance(expires_at, (int, float)):
+        expires_at = access_token_expiry_hint(access_token)
+        if expires_at is not None:
+            session["access_token_expires_at"] = expires_at
+
+    # Expiry is only a refresh-timing hint. PostgREST still validates the
+    # signed token and applies RLS to every database request.
+    if isinstance(expires_at, (int, float)) and expires_at > time.time() + 60:
+        client.postgrest.auth(access_token)
+        return client
+
     try:
-        client.auth.set_session(access_token, refresh_token)
+        if isinstance(expires_at, (int, float)):
+            auth_response = client.auth.refresh_session(refresh_token)
+        else:
+            auth_response = client.auth.set_session(access_token, refresh_token)
+    except AuthRetryableError:
+        raise
     except AuthError:
         session.clear()
         return None
+    refreshed_session = auth_response.session
+    if refreshed_session is None:
+        session.clear()
+        return None
+    session["access_token"] = refreshed_session.access_token
+    session["refresh_token"] = refreshed_session.refresh_token
+    session["access_token_expires_at"] = refreshed_session.expires_at
+    client.postgrest.auth(refreshed_session.access_token)
+    refreshed_user = getattr(refreshed_session, "user", None)
+    if refreshed_user is not None:
+        session["must_set_password"] = must_set_password(refreshed_user)
     return client
 
 
-def get_current_profile(client):
-    user = client.auth.get_user().user
-    if user is None:
+def get_current_profile(client, user_id=None):
+    profile_user_id = user_id or session.get("user_id")
+    if not isinstance(profile_user_id, str) or not profile_user_id:
         return None
     response = (
         client.table("profiles")
-        .select("id, email, full_name, status, role, blocked, is_deleted, stamp, created_at")
-        .eq("id", user.id)
-        .single()
+        .select("id, email, full_name, status, role, blocked, created_at")
+        .eq("id", profile_user_id)
+        .maybe_single()
         .execute()
     )
     return response.data
@@ -769,7 +865,7 @@ def index():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is True:
         return redirect(url_for("set_password"))
     try:
         permissions = get_permissions_for_user(client, profile)
@@ -830,7 +926,7 @@ def module_workspace():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is True:
         return redirect(url_for("set_password"))
 
     path_parts = request.path.strip("/").split("/")
@@ -1314,7 +1410,11 @@ def parse_audit_log_filters(args):
 
 @app.get("/api/audit-log")
 def api_audit_log():
-    client, profile = get_management_profile()
+    try:
+        client, profile = get_management_profile()
+    except (APIError, httpx.HTTPError, RuntimeError):
+        app.logger.exception("Audit log access could not be checked")
+        return jsonify(error="Audit log access could not be checked. Try again shortly."), 503
     if client is None:
         return jsonify(error="You must be logged in."), 401
     if profile is None or profile.get("role") != "superadmin":
@@ -1354,10 +1454,57 @@ def api_audit_log():
 
 
 def get_record_access(module_slug, action):
-    client = get_authenticated_client()
+    try:
+        client = get_authenticated_client()
+    except AuthRetryableError:
+        app.logger.exception("Supabase session refresh is temporarily unavailable")
+        return None, None, None, None, (
+            jsonify(error="The sign-in service could not refresh your session. Try again shortly; you do not need to sign in again yet."),
+            503,
+        )
+    except (APIError, httpx.HTTPError, RuntimeError):
+        app.logger.exception("Record session could not be validated")
+        return None, None, None, None, (
+            jsonify(error="The sign-in service could not verify your session right now. Try again shortly."),
+            503,
+        )
     if client is None:
         return None, None, None, None, (jsonify(error="You must be logged in."), 401)
-    profile = get_current_profile(client)
+    try:
+        profile = get_current_profile(client)
+    except AuthRetryableError:
+        app.logger.exception("Record session validation is temporarily unavailable")
+        return None, None, None, None, (
+            jsonify(error="Your session could not be verified right now. Try again shortly."),
+            503,
+        )
+    except AuthError:
+        session.clear()
+        return None, None, None, None, (
+            jsonify(error="Your session expired. Sign in again and retry."),
+            401,
+        )
+    except APIError as error:
+        app.logger.exception("Record profile could not be loaded")
+        if error.code == "PGRST116":
+            message = "No application profile was found for this signed-in account. Ask an administrator to check the profile record."
+        else:
+            message = (
+                "Your account profile could not be loaded "
+                f"(database error {error.code or 'unknown'}). Check the server log for details."
+            )
+        return None, None, None, None, (jsonify(error=message), 503)
+    except (httpx.HTTPError, RuntimeError):
+        app.logger.exception("Record profile could not be loaded")
+        return None, None, None, None, (
+            jsonify(error="The account profile service is temporarily unavailable. Try again shortly."),
+            503,
+        )
+    if profile is None:
+        return None, None, None, None, (
+            jsonify(error="No application profile was found for this signed-in account. Ask an administrator to check the profile record."),
+            403,
+        )
     if not profile_is_active(profile):
         return None, None, None, None, (jsonify(error="This account is not active."), 403)
     config = RECORD_MODULES.get(module_slug)
@@ -1371,7 +1518,7 @@ def get_record_access(module_slug, action):
     try:
         permissions = get_permissions_for_user(client, profile)
         actions = get_record_actions(client, profile, config, permissions)
-    except (APIError, httpx.HTTPError):
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
         app.logger.exception("Record permissions could not be loaded")
         return None, None, None, None, (
             jsonify(error="Module access needs database setup or could not be checked."),
@@ -1665,8 +1812,46 @@ def get_report_access(report_slug):
 
 def record_error_response(error, config):
     app.logger.exception("Record request could not be completed")
-    if isinstance(error, (APIError, RuntimeError)):
-        return jsonify(error=f"{config['name']} data needs database setup or is blocked by access policies."), 503
+    if isinstance(error, APIError):
+        error_code = getattr(error, "code", None)
+        if error_code == "42501":
+            message = (
+                f"{config['name']} access was denied by a database policy or missing permission. "
+                "Check this account's rights and the table's Row Level Security policies."
+            )
+            status = 403
+        elif error_code in {"42P01", "PGRST205"}:
+            message = (
+                f"{config['name']} database setup is missing a required table or view. "
+                "Apply the required migrations."
+            )
+            status = 503
+        elif error_code in {"42703", "PGRST200", "PGRST204"}:
+            message = (
+                f"{config['name']} database returned schema error {error_code}. "
+                "Check the server log for the missing column or relationship and verify the corresponding migration."
+            )
+            status = 503
+        elif error_code == "23505":
+            message = f"A {config['singular'].lower()} with that code already exists."
+            status = 409
+        elif error_code in {"23502", "23503", "23514"}:
+            message = (
+                f"{config['singular']} details do not satisfy the database requirements. "
+                "Check required fields and linked records."
+            )
+            status = 400
+        else:
+            message = (
+                f"{config['name']} data could not be saved or loaded. "
+                "Check database migrations, access policies, and the server log."
+            )
+            status = 503
+        return jsonify(error=message), status
+    if isinstance(error, RuntimeError):
+        return jsonify(
+            error=f"{config['name']} database connection is not configured correctly."
+        ), 503
     return jsonify(error=f"{config['name']} request could not be completed. Please try again."), 502
 
 
@@ -2257,23 +2442,6 @@ def api_list_records(module_slug):
             else inactive_rows if status_filter == "inactive"
             else active_rows + inactive_rows
         )
-        current_prices = {}
-        if module_slug == "products":
-            product_codes = list({row["prodcode"] for row in rows})
-            if product_codes:
-                price_response = (
-                    client.table("pricehist_current")
-                    .select("prodcode, effdate, unitprice")
-                    .in_("prodcode", product_codes)
-                    .execute()
-                )
-                current_prices = {
-                    row["prodcode"]: {
-                        "unitPrice": row["unitprice"],
-                        "effectiveDate": row["effdate"],
-                    }
-                    for row in price_response.data or []
-                }
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
 
@@ -2307,8 +2475,13 @@ def api_list_records(module_slug):
                 row["prodcode"]: row["unitprice"]
                 for row in (prices.data or [])
             }
-        except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
-            price_map = {}
+        except (APIError, httpx.HTTPError, RuntimeError) as error:
+            return record_error_response(error, config)
+        except (KeyError, TypeError):
+            app.logger.exception("Current product prices returned an invalid response")
+            return jsonify(
+                error="Product prices could not be loaded because the database returned an invalid response."
+            ), 502
         for record in records:
             record["currentPrice"] = price_map.get(record.get("prodCode"))
     response_actions = {
@@ -3604,36 +3777,49 @@ def api_login():
         response = client.auth.sign_in_with_password(
             {"email": email, "password": password}
         )
-        if response.session is None or response.user is None:
-            return jsonify(error="Login could not be completed."), 401
+    except AuthRetryableError:
+        app.logger.exception("Supabase login service is temporarily unavailable")
+        return jsonify(error="Login service is unavailable. Please try again later."), 502
+    except AuthError:
+        return jsonify(error="Invalid email or password."), 401
+    except httpx.HTTPError:
+        app.logger.exception("Supabase sign-in request failed")
+        return jsonify(error="Login service is unavailable. Please try again later."), 502
 
-        client.auth.set_session(
-            response.session.access_token, response.session.refresh_token
-        )
-        profile = get_current_profile(client)
+    if response.session is None or response.user is None:
+        return jsonify(error="Login could not be completed."), 401
+
+    try:
+        client.postgrest.auth(response.session.access_token)
+        profile = get_current_profile(client, response.user.id)
         if profile is None:
-            client.auth.sign_out()
             return jsonify(error="Your account profile is unavailable."), 403
         if (
             profile["status"] in {"blocked", "rejected"}
             or profile.get("blocked") is True
             or profile.get("is_deleted") is True
         ):
-            client.auth.sign_out()
             return jsonify(error="This account is blocked. Contact an administrator."), 403
         if profile["status"] == "pending":
-            client.auth.sign_out()
             return jsonify(error="Your account is pending administrator approval."), 403
     except AuthRetryableError:
         app.logger.exception("Supabase login service is temporarily unavailable")
         return jsonify(error="Login service is unavailable. Please try again later."), 502
+    except APIError:
+        app.logger.exception("Login profile could not be loaded")
+        return jsonify(error="Account profile could not be loaded. Please try again later."), 503
     except (AuthError, httpx.HTTPError):
-        return jsonify(error="Invalid email or password."), 401
+        app.logger.exception("Authenticated login session could not be established")
+        return jsonify(
+            error="Authentication succeeded, but your login session could not be established. Please try again later."
+        ), 502
 
     session.clear()
     session["access_token"] = response.session.access_token
     session["refresh_token"] = response.session.refresh_token
+    session["access_token_expires_at"] = response.session.expires_at
     session["user_id"] = response.user.id
+    session["must_set_password"] = must_set_password(response.user)
     require_password = must_set_password(response.user)
     return jsonify(
         message="Login successful.",
@@ -3669,7 +3855,7 @@ def set_password():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if not must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is not True:
         return redirect(url_for("index"))
     return render_template("set_password.html")
 
@@ -3697,12 +3883,13 @@ def api_set_password():
         return jsonify(error="Passwords do not match."), 400
 
     try:
+        client.auth.set_session(
+            session["access_token"],
+            session["refresh_token"],
+        )
         client.auth.update_user(
             {"password": password, "data": {"must_set_password": False}}
         )
-        user = client.auth.get_user().user
-        if user is None:
-            return jsonify(error="Your session is no longer valid."), 401
     except AuthRetryableError:
         app.logger.exception("Supabase password update service is temporarily unavailable")
         return jsonify(error="Password service is unavailable. Please try again later."), 502
@@ -3710,6 +3897,7 @@ def api_set_password():
         app.logger.exception("Supabase password update failed")
         return jsonify(error="Password could not be updated. Please try again."), 502
 
+    session["must_set_password"] = False
     return jsonify(message="Password updated.", redirect=url_for("index"))
 
 

@@ -50,15 +50,47 @@ let editingProductCode = null;
 let searchTimer;
 
 async function request(url, options = {}) {
-  const headers = {"Content-Type": "application/json", ...options.headers};
+  const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
   if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
-  const response = await fetch(url, {...options, headers});
+  const method = (options.method || "GET").toUpperCase();
+  let response;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      response = await fetch(url, {...options, headers});
+    } catch {
+      if (method === "GET" && attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        continue;
+      }
+      throw new Error("The server is temporarily unreachable. Please try again shortly.");
+    }
+    if (
+      method === "GET" &&
+      attempt === 0 &&
+      [502, 503, 504].includes(response.status)
+    ) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      continue;
+    }
+    break;
+  }
   let result;
   try {
     result = await response.json();
   } catch {
-    throw new Error("The server returned an invalid response.");
+    const redirectedToLogin = response.redirected &&
+      new URL(response.url, window.location.href).pathname === "/login";
+    if (redirectedToLogin) {
+      throw new Error("Your session may have expired. Reload the page and sign in again.");
+    }
+    throw new Error(
+      `The server returned a non-JSON response (HTTP ${response.status}). Try again, and contact an administrator if it continues.`,
+    );
   }
   if (!response.ok) throw new Error(result.error || "Request could not be completed.");
   return result;

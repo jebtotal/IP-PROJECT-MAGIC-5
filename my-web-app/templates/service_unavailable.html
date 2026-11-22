@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Service temporarily unavailable | PentadERP{% endblock %}
+
+{% block guest_content %}
+  <main class="auth-page">
+    <section class="auth-card glass-panel">
+      <div class="auth-brand">
+        <img src="{{ url_for('static', filename='erp-logo.png') }}" alt="" class="brand-logo">
+        <span>PentadERP</span>
+      </div>
+      <h1 class="auth-heading">Service temporarily unavailable</h1>
+      <p class="auth-description">{{ message }}</p>
+      <a class="btn btn-primary auth-submit" href="{{ retry_url }}">Try again</a>
+    </section>
+  </main>
+{% endblock %}

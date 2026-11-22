@@ -16,7 +16,21 @@ async function loadAuditLog() {
   });
   try {
     const response = await fetch(`/api/audit-log?${params}`);
-    const result = await response.json();
+    const responseText = await response.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      if (response.redirected) {
+        throw new Error("Your session may have expired. Sign in again and reopen the Audit Log.");
+      }
+      if (response.status === 404) {
+        throw new Error("The Audit Log API is unavailable. Restart the app to load the latest routes.");
+      }
+      throw new Error(
+        `The server returned a non-JSON response (HTTP ${response.status}). Check the app logs and confirm the latest app version is running.`,
+      );
+    }
     if (!response.ok) throw new Error(result.error || "Audit log could not be loaded.");
     if (!Array.isArray(result.rows) || !Number.isInteger(result.total)) {
       throw new Error("The server returned an invalid audit log.");
