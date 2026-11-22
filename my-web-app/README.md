@@ -188,6 +188,19 @@ The HOPE schema is split into timestamp-ordered migrations:
   blocks, ignored archived children, linked-profile blocks, and restore
   behavior. The test rolls back all fixtures and the temporary profile link.
 
+- `supabase/seeds/s3_dba_05_hr_demo_data.sql` adds the explicitly synthetic
+  HR-only demo departments, jobs, employees, and history rows. It includes a
+  promotion, transfer, future-dated job change, separated employee, soft-deleted
+  employee, and employee with no history. Placeholder salary figures are
+  synthetic and are not real compensation data. Run it after the schema
+  migrations as an approved admin/superadmin; fixed demo keys use
+  `ON CONFLICT DO NOTHING` and conflicting existing values cause the seed to
+  fail and roll back rather than overwrite data. Re-running does not add
+  duplicate rows.
+  `supabase/tests/s3_dba_05_hr_demo_data.sql` reports demo row counts and
+  current-view results, including the intentional behavior that separated
+  employees remain visible and soft-deleted employees do not. Run the seed
+  twice, then the test script, to verify idempotency and expected HR cases.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
