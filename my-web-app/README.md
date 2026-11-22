@@ -495,13 +495,15 @@ Departments, Jobs, and Employees are available at `/human-resources`,
 `/human-resources/jobs`, and `/human-resources/employees`; Customers and
 Products are at `/customers` and `/products`. The HR lists share a record list
 that provides search and administrator active/inactive/all filters.
-Employees are read-only and can additionally be filtered by gender and
-employment status; Current includes employees without a separation date or
-with a separation date on/after today's Asia/Manila date. Department and Job
-lists provide permission-checked create/edit/soft-delete operations and
-administrator-only restore. Department and Job mutations use their
-resource-specific HR rights; deletion is refused while active job-history
-records are linked. Customer deletion is refused while
+Employees can additionally be filtered by gender and employment status;
+Current includes employees without a separation date or with a separation
+date on/after today's Asia/Manila date. Employee creation and editing use the
+employee Add/Edit rights; employee numbers cannot be changed after creation,
+and employee deletion is unavailable.
+Department and Job lists provide permission-checked create/edit/soft-delete
+operations and administrator-only restore. Department and Job mutations use
+their resource-specific HR rights; deletion is refused while active
+job-history records are linked. Customer deletion is refused while
 `sales_active` contains a linked sale. Admin/Superadmin rows show
 Active/Inactive and a stamp; Users see active rows only. The Department form
 maps to `deptcode` and `deptname`; the Job form maps to `jobcode` and

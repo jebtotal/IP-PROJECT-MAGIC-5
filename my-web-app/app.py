@@ -82,7 +82,7 @@ RECORD_MODULES = {
         "key": "empno",
         "key_field": "empNo",
         "display_field": "lastName",
-        "read_only": True,
+        "allowed_actions": ("view", "create", "edit"),
         "filters": (
             {
                 "name": "gender",
@@ -131,6 +131,10 @@ RECORD_MODULES = {
                 "label": "Gender",
                 "maxlength": 1,
                 "required": False,
+                "options": (
+                    {"value": "F", "label": "Female"},
+                    {"value": "M", "label": "Male"},
+                ),
             },
             {
                 "name": "birthDate",
@@ -138,6 +142,7 @@ RECORD_MODULES = {
                 "label": "Birth Date",
                 "maxlength": 10,
                 "required": False,
+                "type": "date",
             },
             {
                 "name": "hireDate",
@@ -145,6 +150,7 @@ RECORD_MODULES = {
                 "label": "Hire Date",
                 "maxlength": 10,
                 "required": False,
+                "type": "date",
             },
             {
                 "name": "sepDate",
@@ -152,6 +158,7 @@ RECORD_MODULES = {
                 "label": "Separation Date",
                 "maxlength": 10,
                 "required": False,
+                "type": "date",
             },
         ),
     },
@@ -802,9 +809,9 @@ def get_record_access(module_slug, action):
     config = RECORD_MODULES.get(module_slug)
     if config is None:
         return None, None, None, None, (jsonify(error="Unknown module."), 404)
-    if config.get("read_only") and action != "view":
+    if action not in config.get("allowed_actions", RIGHTS_ACTIONS):
         return None, None, None, None, (
-            jsonify(error=f"{config['name']} records are read-only."),
+            jsonify(error=f"{action.title()} is not available for {config['name'].lower()} records."),
             403,
         )
     try:
@@ -911,8 +918,20 @@ def record_form_values(config, payload, editing=False):
             return None, f"{field['label']} is required."
         if len(value) > field["maxlength"]:
             return None, f"{field['label']} must be {field['maxlength']} characters or fewer."
-        if field.get("options") and value not in field["options"]:
+        options = field.get("options", ())
+        option_values = {
+            option["value"] if isinstance(option, Mapping) else option
+            for option in options
+        }
+        if options and value and value not in option_values:
             return None, f"Choose valid {field['label'].lower()}."
+        if value and field.get("type") == "date":
+            try:
+                parsed_date = date.fromisoformat(value)
+            except ValueError:
+                return None, f"Enter a valid {field['label'].lower()}."
+            if parsed_date.isoformat() != value:
+                return None, f"Enter a valid {field['label'].lower()}."
         values[field["column"]] = value or None
     return values, None
 
@@ -1375,7 +1394,10 @@ def api_list_records(module_slug):
         counts=counts if is_admin else None,
         is_admin=is_admin,
         actions={
-            action: actions[action] and not config.get("read_only", False)
+            action: (
+                actions[action]
+                and action in config.get("allowed_actions", RIGHTS_ACTIONS)
+            )
             for action in ("create", "edit", "delete")
         },
     )

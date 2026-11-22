@@ -197,14 +197,14 @@ function buildFields() {
       input.appendChild(prompt);
       for (const option of field.options) {
         const item = document.createElement("option");
-        item.value = option;
-        item.textContent = option;
+        item.value = typeof option === "string" ? option : option.value;
+        item.textContent = typeof option === "string" ? option : option.label;
         input.appendChild(item);
       }
     } else {
       input = document.createElement("input");
-      input.type = "text";
-      input.maxLength = field.maxlength;
+      input.type = field.type || "text";
+      if (input.type === "text") input.maxLength = field.maxlength;
     }
     input.name = field.name;
     input.required = field.required;
