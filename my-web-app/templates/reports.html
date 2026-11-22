@@ -1,56 +1,33 @@
 {% extends "base.html" %}
 {% set page_title = "Reports" %}
 {% block title %}Reports | PentadERP{% endblock %}
-{% block head_scripts %}
-  <script>
-    window.reportsConfig = {
-      reports: {{ report_rights|tojson }},
-      today: {{ today|tojson }}
-    };
-  </script>
-  <script src="{{ url_for('static', filename='reports.js', v='1') }}" defer></script>
-{% endblock %}
 
 {% block content %}
-  <section class="management-heading record-heading reports-heading">
+  <section class="management-heading record-heading">
     <div>
       <span class="eyebrow"><span class="status-dot"></span> REPORTS MODULE</span>
       <h2>Reports</h2>
-      <p>Choose an authorized report. Use Print to print or save the report as PDF.</p>
+      <p>Read-only business reports. Administrators control access to each report.</p>
     </div>
   </section>
-
-  {% if permission_error %}
-    <section class="management-panel glass-panel record-panel">
-      <p class="table-message">Report access is unavailable until permissions are configured. Please contact an administrator.</p>
+  {% if reports %}
+    <section class="report-grid" aria-label="Available reports">
+      {% for report in reports %}
+        <a class="report-card glass-panel" href="{{ url_for('report_workspace', report_slug=report.slug) }}">
+          <span class="report-card-icon" aria-hidden="true"><i class="fa-solid fa-chart-column"></i></span>
+          <span class="report-card-copy">
+            <strong>{{ report.name }}</strong>
+            <span>{{ report.description }}</span>
+          </span>
+          <i class="fa-solid fa-arrow-right report-card-arrow" aria-hidden="true"></i>
+        </a>
+      {% endfor %}
     </section>
   {% else %}
-    <section class="management-panel glass-panel record-panel reports-controls" aria-label="Available reports">
-      <div id="report-picker" class="reports-picker"></div>
-      <p id="reports-message" class="table-message" role="status" aria-live="polite">
-        {% if not report_rights %}You do not have access to any individual reports. Ask an administrator to assign report rights.{% endif %}
-      </p>
-    </section>
-
-    <section id="report-output" class="management-panel glass-panel record-panel report-output" hidden aria-live="polite">
-      <div class="reports-toolbar">
-        <div>
-          <span class="eyebrow">REPORT</span>
-          <h2 id="report-title"></h2>
-          <p id="report-subtitle" class="dialog-description"></p>
-        </div>
-        <button id="report-print" type="button" class="btn btn-secondary">
-          <i class="fa-solid fa-print" aria-hidden="true"></i> Print / Save as PDF
-        </button>
-      </div>
-      <form id="report-filters" class="form-grid reports-filter-form"></form>
-      <p id="report-message" class="table-message" role="status" aria-live="polite"></p>
-      <div class="table-wrap">
-        <table class="management-table record-table">
-          <thead id="report-table-head"></thead>
-          <tbody id="report-table-body"></tbody>
-        </table>
-      </div>
+    <section class="management-panel glass-panel report-empty">
+      <h3>No reports assigned</h3>
+      <p>Ask an administrator to grant access to one or more reports.</p>
     </section>
   {% endif %}
+  <p class="auth-footer"><a href="{{ url_for('index') }}">Back to workspace</a></p>
 {% endblock %}

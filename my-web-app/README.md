@@ -592,29 +592,26 @@ assign them automatically.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
 Employee, Department, and Job viewing use the Human Resources View right. Apply
 `20261122000800_s3_dba_07_department_view_access.sql` after
-`20261109000000_hope_app_access.sql` so their RLS policies match that view
-permission. If the active view, table access, or policies are unavailable,
-the UI reports that database setup is needed. Sales View users can search the
-Sales list; users with Sales Add can create a sale using active Customer and
-Salesperson choices. The transaction number is assigned by the database when
-the header is saved. Apply
-`20261122000900_s4_bld_01_sales_header.sql` before using Sales. Apply
-`20261122001000_s4_bld_02_sales_details.sql` to enable Sales line items; the
-separate Sales Details View/Add/Edit/Delete rights govern detail visibility and
-mutations. Assign those rights through User Management. Apply
-`20261122001100_s4_bld_03_sales_payments.sql` to enable payment recording
-against active transactions; the Sales Add right controls payment entry.
-Apply `20261122001200_s4_bld_04_reports.sql` to enable Reports. Users need both
-Reports View and each report's dedicated View right; assign them independently
-through User Management. Apply
-`20261122001300_s4_bld_05_sales_balances_soft_delete.sql` to show transaction
-and customer balances and enable Sales soft delete/restore. Sales Delete governs
-deactivation, while only administrators can restore inactive sales. The
-separate Sale Details rights continue to govern line-item read and mutations.
-Apply `20261122001400_s1_bld_09_audit_log_viewer.sql` after
-`20261109000000_hope_app_access.sql` to enable the Audit Log link and viewer for
-active Superadmins. Search and paging are server-side; changes are displayed
-read-only and the viewer does not provide audit mutation actions.
+`20261109000000_hope_app_access.sql` so the Department and Job RLS policies
+match that view permission. If the active view, table access, or policies are
+unavailable, the UI reports that database setup is needed. Employee
+management still shows a Coming soon page.
+
+Sales is available at `/sales`. It creates system-numbered transactions,
+validates customer and employee selections, manages product detail lines using
+the price effective on the sale date, and records payments with totals and
+balances. Sale headers, details, and payments use the authenticated Supabase
+client and their existing resource rights; administrators can review and
+restore inactive records. The existing sales balance views must be applied
+before totals and balances can be displayed.
+
+Reports is available at `/reports` and contains Top Customers, Product Master
+List, Top Products, Active Employees, All Employees, Employee Job History, and
+Top Sales. Each report requires its matching report-specific right. Date-range
+reports accept a Top N limit, and reports can be printed or saved as PDF using
+the browser's print dialog. Report queries are read-only and run server-side
+after the user's report right is checked; the server therefore needs
+`SUPABASE_SERVICE_ROLE_KEY` configured.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

@@ -28,18 +28,18 @@
     <section class="management-panel glass-panel" aria-labelledby="add-user-heading">
       <h3 id="add-user-heading" class="panel-heading">Add User</h3>
       <p class="panel-description">Create an approved account with a temporary password. The user must set a new password at first login.</p>
-      <form id="add-user-form" class="form-grid">
+      <form id="add-user-form" class="form-grid" autocomplete="off">
         <label>
           Full name
           <input name="full_name" maxlength="120" required>
         </label>
         <label>
           Email
-          <input name="email" type="email" required>
+          <input name="email" type="email" autocomplete="off" required>
         </label>
         <label>
           Temporary password
-          <input name="password" type="password" minlength="8" required>
+          <input name="password" type="password" autocomplete="new-password" minlength="8" required>
         </label>
         <button type="submit" class="btn btn-primary">Add User</button>
       </form>
