@@ -59,5 +59,6 @@ The detailed task plan’s S3 status column is not used as current status. The t
 - [Team working agreement and Definition of Done](TEAM_WORKING_AGREEMENT_DEFINITION_OF_DONE_ROLE_GUIDE.md)
 - [Sprint 2 planning notes and evidence board](SPRINT_2_PLANNING_NOTES_AND_BOARD.md)
 - [Sprint 2 review and retrospective](SPRINT_2_REVIEW_AND_RETROSPECTIVE_REPORT.md)
+- [Sprint 2 carryover prioritization](SPRINT_3_CARRYOVER_PRIORITIZATION.md)
 - [HR database test scripts](../../my-web-app/supabase/tests/)
 
