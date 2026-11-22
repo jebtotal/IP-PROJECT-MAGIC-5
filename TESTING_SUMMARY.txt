@@ -1,0 +1,26 @@
+ERP MAGIC-5 - Testing Summary
+Date: 2026-11-23
+
+This file records the checks that were actually performed. It does not certify
+that every feature, CRUD operation, role, or database integration was tested.
+
+Automated checks:
+- Command: python -m unittest discover -s .\my-web-app\tests
+  Result: 52 tests passed. This full run was before the final result-count-only
+  JavaScript and template changes.
+- Editor diagnostics reported no JavaScript errors in record-list.js or
+  sales-list.js after the result-count change.
+
+Manual browser checks:
+- Sales page loaded 125 active transactions and loaded 83 customer choices and
+  29 salesperson choices.
+- Sales search showed 1 matching result and 0 results for a no-match search.
+- Products page loaded 57 products.
+- Product search showed 1 matching result and 0 results for a no-match search.
+- No records were created, edited, or deleted during these checks.
+
+Not verified:
+- The full application was not exhaustively tested end to end.
+- Product creation and its database audit-trigger behavior were not tested
+  with a real write. The required Supabase audit compatibility migration must
+  be applied by a database administrator before that behavior can be verified.
