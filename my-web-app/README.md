@@ -88,9 +88,9 @@ The HOPE schema is split into timestamp-ordered migrations:
   `20261109000000_hope_app_access.sql` helper maps application `create` checks
   to that code while retaining the legacy JSON fallback. A separate, reviewed
   cutover is required to backfill existing assignments and make normalized
-  rights authoritative. The catalogue includes the 30 rights documented in
-  the checked-in design notes; six rights unspecified by the sprint plan
-  remain deferred.
+  rights authoritative. The base seed contains 30 rights; the task migration
+  later adds the guide's eight missing named rights while preserving the
+  existing generic module-view rights.
 - `20261107000300_s1_dba_04_password_reset_token.sql` adds a private
   `password_reset_token` table referencing `profiles(id)`, with a unique
   lowercase SHA-256 token hash, `reset`/`set_password` purpose, expiry, and
@@ -99,9 +99,8 @@ The HOPE schema is split into timestamp-ordered migrations:
   future work. When integrated, token consumption must atomically reject
   already-used or expired rows.
 - `20261107000400_s1_dba_05_catalogue_seed.sql` reasserts the five modules,
-  three default roles, and 30 rights currently documented in the checked-in
-  design notes. The six unspecified rights and five superadmin account records
-  are deferred; this seed contains no member emails, passwords, or tokens.
+  three default roles, and 30 baseline rights. It contains no member emails,
+  passwords, or tokens.
 - `20261108000000_s1_dba_06_audit_user.sql` makes `audit_user()` prefer the
   authenticated Supabase JWT user ID, then a transaction-local
   `app.username`, then the literal fallback `system`. Authenticated requests
@@ -170,6 +169,22 @@ The HOPE schema is split into timestamp-ordered migrations:
   allowed; the app's update guard requires delete permission and limits
   restores to administrators. Direct DELETE/TRUNCATE remains blocked by the
   existing hard-delete trigger.
+- `20261122000400_s2_bld_01_customers_sprint1.sql` adds the eight guide rights
+  absent from the existing 33-row catalogue: Add/Edit/Delete Job History and
+  Top Products, Active Employees, All Employees, Employee Job History, and
+  Top Sales. The five existing generic module-view rights are retained, so
+  the resulting catalogue has 41 rows, of which 36 are the guide's named
+  rights. The catalogue comparison found 28 guide rights already present,
+  rather than the expected 33; no existing catalogue rows are removed.
+  It adds `profiles.is_deleted` and `profiles.stamp`, a security-invoker
+  `profiles_active` view, and a database guard against disabling or removing
+  the last active Superadmin. New stamps use CREATED/EDITED/DELETED/RESTORED;
+  existing stamp values are not rewritten. It also exposes a delete-right
+  checked helper that tests `sales_active` before customer soft deletion;
+  the existing child trigger remains the race-safe database guard.
+  Apply this migration after the earlier access-control, operational-table,
+  audit, and S3 migrations through the Supabase Dashboard SQL Editor. The
+  repository has no automated migration runner.
 
   Foreign-key references and physical-delete actions:
 
@@ -448,33 +463,38 @@ is redirected to set a new password on first login.
 Keep `.env` private and never put secret or service-role keys in templates or browser-side code. Use a publishable key with Row Level Security (RLS) policies for database access.
 
 User Management is available to admins and superadmins at `/user-management`.
-Admins manage regular users only. Superadmins can approve pending users and
-designate admins; superadmin accounts cannot be blocked, demoted, or removed
-through the application.
+Admins manage regular user accounts and cannot see or change Superadmin
+accounts. Superadmins can approve pending users, designate admins, and manage
+other accounts; the last Superadmin cannot be removed or demoted, and the last
+active Superadmin cannot be blocked.
+Removing an account soft-deletes its profile and can be restored. New stamps
+are recorded with the guide's action words and shown without rewriting legacy
+ADD/EDIT/DELETE/RESTORE values.
 
-Administrators can assign View, Create, Edit, and Delete rights for Customer,
-Product, Human Resources, Sales, and Reports from the Rights dialog. Changes
-are stored in the normalized `user_permission` assignments and the
-`right_catalog`, with the legacy JSON `user_permissions` record kept
-synchronized for compatibility. Admins and superadmins have implicit full
-access to all five modules. Apply
+Administrators can assign the guide's 36 named rights from the grouped Rights
+dialog, including per-module selection and All/None controls. Existing generic
+module-view rights remain available for navigation. Changes are stored in the
+normalized `user_permission` assignments and the `right_catalog`, with the
+legacy JSON `user_permissions` record kept synchronized for compatibility.
+Admins and superadmins have implicit full access to all five modules. Apply
 `20261107000200_s1_dba_03_access_control.sql` followed by
-`20261107000400_s1_dba_05_catalogue_seed.sql` after confirming the target
-project's profile schema; the app also requires compatible
+`20261107000400_s1_dba_05_catalogue_seed.sql` and the later task migration
+after confirming the target project's profile schema; the app also requires compatible
 `user_permissions` and `audit_log` tables. Rights changes are recorded in
 `audit_log`; verify the deployed tables and policies if the app reports that
 rights need database setup.
 
 The base access-control and catalogue-seed migrations define 30 rights; the
-separate price-history migration adds its three mutation rights. Job History
-Add/Edit/Delete and the Reports rights Top Products, Active Employees, All
-Employees, Employee Job History, and Top Sales remain deferred; these require
-a future DB Admin catalogue update.
+separate price-history migration adds three price mutation rights, and the
+S2-BLD-01 migration adds the eight guide rights found missing in the checked-in
+catalogue.
 
 Customers and Products are available at `/customers` and `/products`. Their
 shared record list provides search, administrator active/inactive/all filters,
 permission-checked create/edit/soft-delete operations, and administrator-only
-restore. The Customer form maps to `custno`, `custname`, `address`, and
+restore. Customer deletion is refused while `sales_active` contains a linked
+sale. Admin/Superadmin rows show Active/Inactive and a stamp; Users see active
+rows only. The Customer form maps to `custno`, `custname`, `address`, and
 `payterm`; the Product form maps to `prodcode`, `description`, and `unit`.
 Product rows link to Price History, which supports dated price creation,
 editing (including the effective date), soft deletion, and administrator

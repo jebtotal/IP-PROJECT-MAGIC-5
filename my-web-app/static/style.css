@@ -439,6 +439,15 @@ a { color: inherit; }
 .form-grid { gap: 0.9rem; }
 .form-grid label,.edit-user-form label { display: grid; gap: 0.45rem; color: var(--text-muted); font-size: 0.68rem; font-weight: 800; }
 .table-wrap { width: 100%; min-width: 0; overflow-x: hidden; }
+.user-table-wrap { overflow-x: auto; }
+.user-management-table { min-width: 68rem; table-layout: auto; }
+.user-management-table th:nth-child(1) { width: 13%; }
+.user-management-table th:nth-child(2) { width: 18%; }
+.user-management-table th:nth-child(3) { width: 10%; }
+.user-management-table th:nth-child(4) { width: 14%; }
+.user-management-table th:nth-child(5) { width: 9%; }
+.user-management-table th:nth-child(6) { width: 16%; }
+.user-management-table th:nth-child(7) { width: 20%; }
 .management-table { width: 100%; min-width: 0; table-layout: fixed; border-collapse: collapse; text-align: left; }
 .management-table th { padding: 0.55rem 0.35rem; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.59rem; font-weight: 900; letter-spacing: 0.07em; text-transform: uppercase; }
 .management-table th:nth-child(1) { width: 18%; }
@@ -457,6 +466,7 @@ a { color: inherit; }
 .status-approved { background: rgba(16, 185, 129, 0.12); color: #059669; }
 .status-pending { background: rgba(245, 158, 11, 0.12); color: #b45309; }
 .status-blocked { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
+.status-inactive { background: rgba(120, 113, 108, 0.12); color: var(--text-muted); }
 .dark .status-approved { color: #34d399; }
 .dark .status-pending { color: #fbbf24; }
 .dark .status-blocked { color: #fca5a5; }

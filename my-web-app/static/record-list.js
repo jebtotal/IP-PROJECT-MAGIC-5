@@ -17,10 +17,10 @@ let editingRecord = null;
 let searchTimer;
 
 async function request(url, options = {}) {
-  const response = await fetch(url, {
-    headers: {"Content-Type": "application/json", ...options.headers},
-    ...options,
-  });
+  const headers = {"Content-Type": "application/json", ...options.headers};
+  const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  const response = await fetch(url, {...options, headers});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "Request could not be completed.");
   return result;
@@ -40,6 +40,14 @@ function addCell(row, value, label, title = "") {
   cell.textContent = value || "—";
   if (title) cell.title = title;
   row.appendChild(cell);
+  return cell;
+}
+
+function addBadge(cell, value, className) {
+  const badge = document.createElement("span");
+  badge.className = className;
+  badge.textContent = value;
+  cell.replaceChildren(badge);
   return cell;
 }
 
@@ -84,8 +92,14 @@ function renderRecords(records) {
       addCell(row, record[field.name], field.label, String(record[field.name] || ""));
     }
     if (config.isAdmin) {
-      const status = addCell(row, record.isDeleted ? "Inactive" : "Active", "Status");
-      status.classList.add("record-status");
+      const statusCell = document.createElement("td");
+      statusCell.dataset.label = "Status";
+      addBadge(
+        statusCell,
+        record.isDeleted ? "Inactive" : "Active",
+        `status-badge ${record.isDeleted ? "status-inactive" : "status-approved"}`,
+      );
+      row.appendChild(statusCell);
       addCell(row, record.stamp, "Stamp", record.stamp || "");
     }
     const actionCell = document.createElement("td");
