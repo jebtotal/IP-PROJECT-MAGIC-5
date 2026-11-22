@@ -61,5 +61,6 @@ The detailed task plan’s S3 status column is not used as current status. The t
 - [Sprint 2 review and retrospective](SPRINT_2_REVIEW_AND_RETROSPECTIVE_REPORT.md)
 - [Sprint 2 carryover prioritization](SPRINT_3_CARRYOVER_PRIORITIZATION.md)
 - [Sprint 3 mid-sprint check and impediment log](MID_SPRINT_3_CHECK_AND_IMPEDIMENT_LOG.md)
+- [Sprint 3 velocity and Sprint 4 risk register](SPRINT_3_VELOCITY_AND_SPRINT_4_RISK_REGISTER.md)
 - [HR database test scripts](../../my-web-app/supabase/tests/)
 
