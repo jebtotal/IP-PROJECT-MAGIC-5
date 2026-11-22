@@ -255,6 +255,28 @@ The HOPE schema is split into timestamp-ordered migrations:
   value and verifies two invalid examples per column (`NET`, `60D`; `box`,
   `kg`) are rejected by the expected constraints, then rolls back.
 
+- `supabase/tests/s2_dba_04_customer_product_delete_guards.sql` verifies the
+  Customer/Product child-record deletion rules without modifying a migration.
+  The existing `trg_check_children()` function checks active `sales.custno`
+  rows before a Customer soft-delete, and active `salesdetail.prodcode` or
+  `pricehist.prodcode` rows before a Product soft-delete. Soft-deleted child
+  rows do not block the parent. Parents without children can be soft-deleted
+  and restored; active-child restore is not tested because the blocked parent
+  never enters the deleted state. `hope_protect_record_update()` continues to
+  enforce delete permissions and admin-only restore through the application.
+  Direct hard DELETE/TRUNCATE is blocked independently by the existing
+  `customer_bd_block` and `product_bd_block` triggers.
+
+  Physical foreign-key delete actions are `NO ACTION`: `sales.custno` points
+  to `customer.custno`; `salesdetail.prodcode` and `pricehist.prodcode` point
+  to `product.prodcode`. Thus physical parent deletion is not cascaded. The
+  test prints the installed FK and trigger catalog, asserts the expected
+  references and triggers, then exercises each active/archived child case,
+  soft-delete, restore, and blocked direct DELETE in a rollback-only
+  transaction. Run it only in a scratch/copy database as a database owner
+  with an approved admin/superadmin profile. The SQL test has not been run
+  against the live team database in this environment.
+
 - `supabase/seeds/s3_dba_05_hr_demo_data.sql` adds the explicitly synthetic
   HR-only demo departments, jobs, employees, and history rows. It includes a
   promotion, transfer, future-dated job change, separated employee, soft-deleted
