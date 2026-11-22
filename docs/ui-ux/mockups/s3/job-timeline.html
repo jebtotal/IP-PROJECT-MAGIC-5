@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Timeline — PentadERP</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@4.0.0/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+  <style>
+    :root { --bg-main: #fafaf9; --bg-surface: #fff; --bg-card: #fff; --border-color: #e7e5e4; --text-main: #292524; --text-muted: #78716c; }
+    .dark { --bg-main: #1c1917; --bg-surface: #292524; --bg-card: #292524; --border-color: rgba(255,255,255,.05); --text-main: #f5f5f4; --text-muted: #a8a29e; }
+    body { font-family:'DM Sans',system-ui,sans-serif; background:var(--bg-main); color:var(--text-main); }
+    .glass-panel { background:var(--bg-card); border:1px solid var(--border-color); box-shadow:0 4px 20px -2px rgba(0,0,0,.03); }
+    .dark .glass-panel { box-shadow:0 4px 20px -2px rgba(0,0,0,.25); }
+    button { border-radius:9999px !important; }
+    .glow-hover { transition:all .25s ease; }
+    .glow-hover:hover { box-shadow:0 12px 24px -4px rgba(5,150,105,.08); border-color:rgba(5,150,105,.3); transform:translateY(-2px); }
+  </style>
+</head>
+<body class="light">
+<section class="p-6"><h2 class="text-2xl font-bold mb-6">Employee Job Timeline</h2>
+<div class="job-timeline" aria-label="Employee job timeline"><ol class="job-timeline-list divide-y divide-gray-200">
+  <li class="job-timeline-item is-current flex items-start gap-3"><span class="job-timeline-marker" aria-hidden="true"><i class="fa-solid fa-circle"></i></span><article class="job-timeline-card w-full p-4"><header class="job-timeline-card-heading"><h4 class="job-timeline-job-title font-semibold">Senior Software Engineer</h4><p class="job-timeline-dept mt-1">ENG · Engineering</p></header><div class="job-timeline-meta mt-3"><div><dt class="sr-only">Effective date</dt><dd class="job-timeline-effective">2023-01-01</dd></div><div class="job-timeline-badge"><span class="badge badge-current">Current</span></div></div></article></li>
+  <li class="job-timeline-item flex items-start gap-3"><span class="job-timeline-marker" aria-hidden="true"><i class="fa-solid fa-up-long" aria-label="Promotion"></i></span><article class="job-timeline-card w-full p-4"><header class="job-timeline-card-heading"><h4 class="job-timeline-job-title">Software Engineer</h4><p class="job-timeline-dept mt-1">ENG · Engineering</p></header><div class="job-timeline-meta mt-3"><div><dt class="sr-only">Effective date</dt><dd class="job-timeline-effective">2022-06-15</dd></div><span class="job-timeline-status">Promotion</span></div></article></li>
+  <li class="job-timeline-item flex items-start gap-3"><span class="job-timeline-marker" aria-hidden="true"><i class="fa-solid fa-exchange-alt" aria-label="Transfer"></i></span><article class="job-timeline-card w-full p-4"><header class="job-timeline-card-heading"><h4 class="job-timeline-job-title">Team Lead</h4><p class="job-timeline-dept mt-1">MGMT · Management</p></header><div class="job-timeline-meta mt-3"><div><dt class="sr-only">Effective date</dt><dd class="job-timeline-effective">2021-11-01</dd></div><span class="job-timeline-status">Transfer</span></div></article></li>
+  <li class="job-timeline-item flex items-start gap-3"><span class="job-timeline-marker" aria-hidden="true"><i class="fa-solid fa-circle"></i></span><article class="job-timeline-card w-full p-4"><header class="job-timeline-card-heading"><h4 class="job-timeline-job-title">Junior Developer</h4><p class="job-timeline-dept mt-1">ENG · Engineering</p></header><div class="job-timeline-meta mt-3"><div><dt class="sr-only">Effective date</dt><dd class="job-timeline-effective">2020-03-01</dd></div></article></li>
+</ol></div></section>
+<p class="job-timeline-empty mt-6 text-center text-gray-500">No job history has been recorded for this employee.</p>
+
+<!-- Dark mode section (visible when .dark class on <html>) -->
+<section class="p-6 dark:hidden">
+  <h2 class="text-2xl font-bold mb-6">Employee Job Timeline (Dark)</h2>
+  <div class="job-timeline" aria-label="Employee job timeline" style="background:var(--bg-surface);">
+    <ol class="job-timeline-list divide-y divide-gray-800">
+      <li class="job-timeline-item is-current flex items-start gap-3">
+        <span class="job-timeline-marker" aria-hidden="true"><i class="fa-solid fa-circle"></i></span>
+        <article class="job-timeline-card w-full p-4" style="background:var(--bg-card); border-color:var(--border-color);">
+          <header class="job-timeline-card-heading">
+            <h4 class="job-timeline-job-title font-semibold text-text-main">Senior Software Engineer</h4>
+            <p class="job-timeline-dept mt-1 text-text-muted">ENG · Engineering</p>
+          </header>
+          <div class="job-timeline-meta mt-3">
+            <div><dt class="sr-only">Effective date</dt><dd class="job-timeline-effective">2023-01-01</dd></div>
+            <div class="job-timeline-badge"><span class="badge badge-current" style="background:var(--brand-500/10); color:var(--brand-500);">Current</span></div>
+          </div>
+        </article>
+      </li>
+    </ol>
+  </div>
+</section>
+</body>
+</html>
