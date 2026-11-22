@@ -31,7 +31,8 @@ using values provided by the project administrator. These identify the
 Supabase project and its publishable key. Do not use a secret or service-role
 key as `SUPABASE_KEY`. The app loads `.env` with `python-dotenv` and exits with
 an error if either required value is missing. See the environment-variable
-table below for optional settings. Never commit `.env`.
+table below for optional settings. `.env.example` lists all supported names
+without containing credentials; never commit `.env`.
 
 Start the app from `my-web-app`:
 
@@ -233,12 +234,83 @@ database administrator for the authoritative SQL if it is not available.
 | `MAIL_USERNAME` | No | SMTP login and fallback sender address |
 | `MAIL_PASSWORD` | No | SMTP password |
 | `MAIL_USE_TLS` | No | Whether to use STARTTLS; defaults to `true` |
+| `DATABASE_URL` | For database backup/restore | Direct PostgreSQL URL for the backup source |
+| `RESTORE_DATABASE_URL` | For database restore | Direct URL for a separate, pre-created restore target |
 
 Password recovery requires `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER`, and a
 sender address (`MAIL_DEFAULT_SENDER` or `MAIL_USERNAME`). Keep service-role
 and SMTP credentials server-side only. Never commit `.env` or put secrets in
 templates or browser-side code. `.env` and other environment files are ignored
 by Git.
+
+## HR query indexes
+
+No additional HR index is proposed in S3-DBA-06. The HR module still shows
+“Coming soon” and has no employee/department/job list or search query to
+benchmark. The generic record-list API fetches rows before applying search in
+Python, so name indexes would not accelerate that search. `get_current_profile`
+and user-management record lookups filter `profiles.id`, whose primary key is
+already indexed; the admin user list filters by role and orders by
+`created_at`. Employee, department, and job codes are primary keys; S3-DBA-02
+already created the partial unique `jobhistory(empno, effdate) WHERE NOT
+is_deleted` index used by the current employee view. Do not add duplicate or
+speculative indexes. Once the HR API queries are implemented, measure
+representative data with `EXPLAIN (ANALYZE, BUFFERS)` before and after any
+candidate index.
+
+## PostgreSQL backup and restore
+
+The local scripts use PostgreSQL's `pg_dump`, `pg_restore`, and `psql` command
+line clients; there is no Docker dependency or migration runner. Install the
+PostgreSQL client tools for your operating system and ensure all three
+executables are on `PATH`. Python 3.10+ and the project requirements (including
+`python-dotenv`) are also required. The Python scripts work on Windows, macOS,
+and Linux.
+
+Copy `.env.example` to `.env`. Set `DATABASE_URL` to a direct PostgreSQL
+connection URL for the source database, including its database password and
+`sslmode=require` for a remote Supabase connection. Set
+`RESTORE_DATABASE_URL` to a different, already-created scratch/restore
+database. Never use a Supabase publishable key or service-role key as the
+database password; keep both URLs out of source control and chat.
+
+From `my-web-app`, create a custom-format backup:
+
+```powershell
+py scripts\db_backup.py
+```
+
+On macOS/Linux, run `python3 scripts/db_backup.py`. Backups are written to
+`my-web-app/backups/`, which is git-ignored; on non-Windows systems the script
+sets backup file permissions to owner-only. Keep backup files in protected
+storage and remove them when no longer needed.
+
+Restore a listed backup into the separately configured target:
+
+```powershell
+py scripts\db_restore.py backups\hope-db-<timestamp>.dump
+```
+
+On macOS/Linux, run `python3 scripts/db_restore.py backups/hope-db-<timestamp>.dump`.
+The script refuses to restore into the source database and checks whether the
+target already contains user objects. For a non-empty target it stops unless
+`--confirm-overwrite` is explicitly supplied. That flag allows
+`pg_restore --clean` to replace matching objects from the archive; unrelated target
+objects remain. The restore runs in one transaction, does not create/drop the
+database, and requires a pre-created target and sufficient PostgreSQL
+permissions. First verify the target URL and use a scratch database; do not
+restore over the shared team database.
+
+After restoring, compare every user-table row count against the still-unchanged
+source:
+
+```powershell
+py scripts\db_compare.py
+```
+
+On macOS/Linux, run `python3 scripts/db_compare.py`. The command prints source
+and restored counts for every table and exits with an error if any table is
+missing or has a different count.
 
 ## Application notes
 

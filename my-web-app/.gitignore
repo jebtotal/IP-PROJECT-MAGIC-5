@@ -5,8 +5,10 @@ __pycache__/
 *.py[cod]
 instance/
 coverage/
+/backups/
 
 .env
 .env.*
+!.env.example
 
 .DS_Store
