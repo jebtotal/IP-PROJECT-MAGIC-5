@@ -424,7 +424,7 @@ database administrator for the authoritative SQL if it is not available.
 | `SUPABASE_URL` | Yes | Supabase project URL |
 | `SUPABASE_KEY` | Yes | Supabase publishable key used by the app |
 | `FLASK_SECRET_KEY` | No for local development | Flask session and reset-token signing key; if omitted, a temporary key is generated at startup and sessions do not survive a restart |
-| `SUPABASE_SERVICE_ROLE_KEY` | Only for password recovery | Server-only key used for administrator Auth operations |
+| `SUPABASE_SERVICE_ROLE_KEY` | For reports, Sales reference/price/balance reads, administrator Auth operations, and password recovery | Server-only key; never expose it to the browser |
 | `MAIL_SERVER` | Only for password recovery | SMTP server hostname |
 | `MAIL_DEFAULT_SENDER` | Only for password recovery unless `MAIL_USERNAME` is set | From address for password reset email |
 | `MAIL_PORT` | No | SMTP port; defaults to `587` |
@@ -434,11 +434,14 @@ database administrator for the authoritative SQL if it is not available.
 | `DATABASE_URL` | For database backup/restore | Direct PostgreSQL URL for the backup source |
 | `RESTORE_DATABASE_URL` | For database restore | Direct URL for a separate, pre-created restore target |
 
-Password recovery requires `SUPABASE_SERVICE_ROLE_KEY`, `MAIL_SERVER`, and a
-sender address (`MAIL_DEFAULT_SENDER` or `MAIL_USERNAME`). Keep service-role
-and SMTP credentials server-side only. Never commit `.env` or put secrets in
-templates or browser-side code. `.env` and other environment files are ignored
-by Git.
+Reports execute read-only queries after checking the user's individual report
+right. Sales uses the service-role client for reference data and read-only
+price/balance views; sale writes still use the authenticated Supabase client.
+Administrator Auth operations also use this key. Password recovery additionally
+requires `MAIL_SERVER` and a sender address (`MAIL_DEFAULT_SENDER` or
+`MAIL_USERNAME`). Keep service-role and SMTP credentials server-side only.
+Never commit `.env` or put secrets in templates or browser-side code. `.env`
+and other environment files are ignored by Git.
 
 ## HR query indexes
 
@@ -595,7 +598,8 @@ Employee, Department, and Job viewing use the Human Resources View right. Apply
 `20261109000000_hope_app_access.sql` so the Department and Job RLS policies
 match that view permission. If the active view, table access, or policies are
 unavailable, the UI reports that database setup is needed. Employee
-management still shows a Coming soon page.
+management, Sales, and Reports are implemented, but their database-backed
+features still require the corresponding deployed schema, views, and policies.
 
 Sales is available at `/sales`. It creates system-numbered transactions,
 validates customer and employee selections, manages product detail lines using
