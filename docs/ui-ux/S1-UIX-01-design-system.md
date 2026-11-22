@@ -195,3 +195,40 @@ These are reported as implemented; this document does not silently change them.
 - Put wide tables in an `overflow-x-auto` wrapper; use compact uppercase headers, padded cells, divided rows, and a right-aligned actions column.
 - Follow the observed `sm`/`md`/`lg` grid and visibility patterns, preserve spacing and radii, and test both light and dark modes.
 - Keep this document's identified chart/font and missing-token exceptions visible when extending the design; do not silently treat them as palette tokens.
+
+## 11. v1.1 Changelog (Sprint 2)
+
+New components and UI patterns implemented in Sprint 2 based on the S2 usability review and mockups:
+
+- **Search pill:** Input with magnifying glass icon and sr-only label; `rounded-full` border-radius, `gray-200`/`dark:bg-slate-800/50` background, `brand-600` focus ring; resides inside `.record-toolbar` flex container alongside action buttons.
+
+- **Tab pills with count chips:** Status filter tabs (`Active/Inactive/All`) rendered as inline-flex pills with `gap-0.35rem`, `padding 0.45rem 0.8rem`, `font-size 0.68rem`, `font-weight 800`. Active tab uses solid `brand-600` with white text; inactive tabs use `gray-200`/`dark:bg-slate-800/10` fill with muted text. Count chips positioned at `p-1` on tab buttons, using `text-[10px] font-bold uppercase tracking-wider` with `brand-500/10` background and `brand-500` text in light mode, `amber-500/10`/`amber-500` in dark mode.
+
+- **Status badge:** Colored pill indicating row status. Active: `emerald-500/10` background with `emerald-500` text. Inactive: `slate-600/10` with `slate-400` text. Pending: `amber-500/10` with `amber-500` text. Blocked: `red-500/10` with `red-500` text. Dark mode variants use `emerald-500`→`fbbf24`, `amber-500`→`fbbf24`, `red-500`→`fca5a5`.
+
+- **Stamp text:** Column header terminology per screen. Price History uses `"Stamp Log"` (S2UX05-06 fix). Customer/Product lists show `"—"` placeholder when no value. Stamp values display as `CREATED/EDITED/DELETED/RESTORED + user + datetime` for Admin/Superadmin views; Users see `"—"` only. Light/dark: `slate-950`/`slate-900` text on light/dark surfaces with `slate-300/slate-350` 10% opacity background.
+
+- **Edit/Delete/Restore buttons:** Right-aligned action column buttons with `rounded-full` pill shape (inherited from global `button { border-radius: 9999px !important; }`). Edit: `btn-outline` with `brand-600` border and text. Delete: `btn-danger` with white text. Restore: unique style for restored rows (not currently in reference, proposed as `brand-600` with white text on shaded background). Light/dark: Edit buttons maintain `brand-600`/`34d399`; Delete uses `red-500`/`fca5a5`; Restore uses proposed `emerald-600`/`34d399` on shaded backgrounds.
+
+- **Invalid-input style:** Form fields with validation errors get `border-red-500`/`dark:border-red-600` with `focus:ring-2 focus:ring-red-500`/`dark focus:ring-red-600`. Error message appears below field using `form-message` class: `border-red-500/25`/`dark:bg-red-600/08`, `color-red-500`/`dark:text-rose-500`, `text-sm` font. Applied dynamically via JavaScript on submit or blur.
+
+- **Confirm/blocked-delete dialog:** Modal overlay with `.confirm-dialog` class: `max-w-md`, `rounded-3xl`, `p-7`, amber icon/title area with red Proceed action and neutral Cancel. Blocked-delete state shows confirm modal with disabled Proceed button and explanatory text: "This customer has active sales links. Remove sales links first or contact Superadmin." Light/dark: amber title area on light, amber-500 on dark; red proceed button on light, `red-600`/`fca5a5` on dark.
+
+- **"Coming soon" state:** Grayed-out pill button with `opacity-50`/`dark:opacity-50` and `not-allowed` cursor, displaying "Coming soon" text. Used for modules/features not yet built. Accompanied by `coming-soon` caption text using `text-[10px] font-bold uppercase tracking-wider` with `gray-400`/`dark:gray-500` color. Light/dark: `gray-400` on light, `gray-500` on dark.
+
+All new components follow the existing design-system tokens: DM Sans typography, remapped Tailwind color palette (`brand` = emerald, `indigo` = terracotta, `sky` = warm orange, `slate` = warm stone/charcoal), paired light/dark treatments using the `.dark` class on `<html>`, and consistent spacing/radii from the reference (rounded-xl for inputs, rounded-full for pills/badges, `p-6`/`p-7`/`p-8` padding rhythm).
+## 12. v1.2 Changelog (Sprint 3)
+
+New components and UI patterns implemented in Sprint 3 based on the S3 usability review and mockups:
+
+- **Job timeline:** Visual timeline rendering employee job history with stacked role badges and duration labels; `space-y-2` vertical rhythm, `font-sm` text, `brand-500/10` separators between steps, dark mode uses `slate-300` 10% opacity separators.
+
+- **HR tab bar:** Compact pill tabs for HR section navigation (`Job History`, `Employee Info`, `Payroll`) with `gap-0.35rem`, `padding 0.45rem 0.8rem`, `font-size 0.68rem`, `font-weight 800`; selected tab uses solid `brand-600` with white text, inactive tabs use `gray-200`/`dark:bg-slate-800/10` fill with muted text; light/dark variants follow the established tab pill pattern.
+
+- **Separated badge:** Standalone badge component with `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider`; uses `brand-500`/`amber-500`/`emerald-500`/`red-500` text with respective `/10` tint background; light/dark: tint background swaps between theme surfaces with contrasting text color.
+
+- **Masked-salary pattern:** Input field displaying masked salary (e.g., `*****12,345`) with `password` type visibility toggle; right eye icon reveals actual value `text-[11px] font-medium text-gray-700 dark:text-gray-300`; input uses `rounded-xl`, `py-2.5`, `pl-10`, and `bg-white`/`dark:bg-slate-950/50`; masked value appears with `text-gray-500/50` placeholder style in light and `slate-400/30` in dark.
+
+- **Profile layout:** Two-column profile view with avatar and name on left (`w-1/2 md:w-1/3`), and stats/address on right (`w-1/2 md:w-2/3`); avatar uses `rounded-full w-20 h-20`, stats grid is `grid grid-cols-2 gap-4 text-sm`; light mode uses `--text-main`, dark mode uses `--text-muted` for secondary stats.
+
+Light and dark values follow the design-system token set: `--bg-main`/`--bg-surface`/`--bg-card`, `--border-color`/`--text-main`/`--text-muted`, and semantic colors (`brand-500`/`brand-600`/`emerald-500`/`amber-500`/`red-500`) with their dark-mode variants via the `.dark` class on `<html>`.

@@ -128,6 +128,17 @@
                 <span>User Management</span>
               </a>
             {% endif %}
+            {% if profile.role == "superadmin" %}
+              <a
+                href="{{ url_for('audit_log_viewer') }}"
+                class="sidebar-link{% if request.endpoint == 'audit_log_viewer' %} is-active{% endif %}"
+                aria-label="Audit Log"
+                title="Audit Log"
+              >
+                <i class="fa-solid fa-clipboard-list" aria-hidden="true"></i>
+                <span>Audit Log</span>
+              </a>
+            {% endif %}
           </nav>
           <div class="sidebar-user">
             <div class="user-avatar" aria-hidden="true">

@@ -10,10 +10,11 @@
       keyField: {{ record_config.key_field|tojson }},
       displayField: {{ record_config.display_field|tojson }},
       fields: {{ record_config.fields|tojson }},
+      filters: {{ record_config.filters|default(())|tojson }},
       isAdmin: {{ "true" if is_admin else "false" }}
     };
   </script>
-  <script src="{{ url_for('static', filename='record-list.js', v='4') }}" defer></script>
+  <script src="{{ url_for('static', filename='record-list.js', v='12') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -25,7 +26,7 @@
     </div>
   </section>
 
-  {% if record_config.module_slug in ("departments", "jobs") %}
+  {% if record_config.module_slug in ("departments", "jobs", "employees") %}
     <nav class="record-tabs" aria-label="Human Resources lists">
       <a
         class="record-tab{% if record_config.module_slug == 'departments' %} is-active{% endif %}"
@@ -37,6 +38,11 @@
         href="/human-resources/jobs"
         {% if record_config.module_slug == "jobs" %}aria-current="page"{% endif %}
       >Jobs</a>
+      <a
+        class="record-tab{% if record_config.module_slug == 'employees' %} is-active{% endif %}"
+        href="/human-resources/employees"
+        {% if record_config.module_slug == "employees" %}aria-current="page"{% endif %}
+      >Employees</a>
     </nav>
   {% endif %}
 
@@ -47,6 +53,20 @@
         <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
         <input id="record-search" type="search" placeholder="Search {{ record_config.name|lower }}..." autocomplete="off">
       </label>
+      {% if record_config.filters %}
+        <div id="record-filters" class="record-filters" aria-label="{{ record_config.name }} filters">
+          {% for filter in record_config.filters %}
+            <label class="record-filter">
+              <span>{{ filter.label }}</span>
+              <select data-record-filter="{{ filter.name }}" aria-label="Filter {{ record_config.name|lower }} by {{ filter.label|lower }}">
+                {% for option in filter.options %}
+                  <option value="{{ option.value }}">{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            </label>
+          {% endfor %}
+        </div>
+      {% endif %}
       <button id="record-add" type="button" class="btn btn-primary" hidden>
         <i class="fa-solid fa-plus" aria-hidden="true"></i> Add
       </button>
@@ -60,6 +80,7 @@
       </div>
     {% endif %}
 
+    <p id="record-result-count" class="table-message" role="status" aria-live="polite"></p>
     <p id="records-message" class="table-message" role="status" aria-live="polite"></p>
     <div class="table-wrap">
       <table id="record-table" class="management-table record-table" data-record-module="{{ record_config.module_slug }}" data-admin="{{ 'true' if is_admin else 'false' }}">

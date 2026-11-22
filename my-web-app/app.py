@@ -1,21 +1,24 @@
 
-
+import base64
+import json
+import hmac
 import os
 import secrets
 import smtplib
-import hmac
+import time
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from email.message import EmailMessage
-from collections.abc import Mapping
 
 import httpx
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, abort, jsonify, redirect, render_template, request, session, url_for
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from postgrest.exceptions import APIError
 from supabase import create_client
 from supabase_auth.errors import AuthError, AuthRetryableError
+from werkzeug.exceptions import HTTPException, InternalServerError
 
 load_dotenv()
 
@@ -131,6 +134,50 @@ MODULE_SLUGS = {
     "Sales": "sales",
     "Reports": "reports",
 }
+REPORTS = {
+    "products_master": {
+        "right": "reports.productsMaster.view",
+        "resource": "products_master",
+        "name": "Product Master List",
+        "filters": (),
+    },
+    "active_employees": {
+        "right": "reports.activeEmployees.view",
+        "resource": "active_employees",
+        "name": "Active Employees",
+        "filters": (),
+    },
+    "all_employees": {
+        "right": "reports.allEmployees.view",
+        "resource": "all_employees",
+        "name": "All Employees",
+        "filters": (),
+    },
+    "employee_job_history": {
+        "right": "reports.employeeJobHistory.view",
+        "resource": "employee_job_history",
+        "name": "Employee Job History",
+        "filters": ("employee",),
+    },
+    "top_customers": {
+        "right": "reports.topCustomers.view",
+        "resource": "top_customers",
+        "name": "Top Customers",
+        "filters": ("date_range", "top_n"),
+    },
+    "top_products": {
+        "right": "reports.topProducts.view",
+        "resource": "top_products",
+        "name": "Top Products",
+        "filters": ("date_range", "top_n"),
+    },
+    "top_sales": {
+        "right": "reports.topSales.view",
+        "resource": "top_sales",
+        "name": "Top Sales",
+        "filters": ("date_range", "top_n"),
+    },
+}
 WORKSPACE_MODULES = (
     {
         "name": "Customer",
@@ -154,6 +201,99 @@ WORKSPACE_MODULES = (
     {"name": "Reports", "slug": "reports", "permission": "Reports", "icon": "fa-chart-column"},
 )
 RECORD_MODULES = {
+    "employees": {
+        "module_slug": "employees",
+        "name": "Employees",
+        "singular": "Employee",
+        "permission": "Human Resources",
+        "rights_module": "hr",
+        "rights_resource": "employees",
+        "rights_view_resource": "hr",
+        "table": "employee",
+        "active_view": "employee_active",
+        "key": "empno",
+        "key_field": "empNo",
+        "display_field": "lastName",
+        "allowed_actions": ("view", "create", "edit", "delete"),
+        "filters": (
+            {
+                "name": "gender",
+                "label": "Gender",
+                "options": (
+                    {"value": "all", "label": "All genders"},
+                    {"value": "F", "label": "Female"},
+                    {"value": "M", "label": "Male"},
+                ),
+            },
+            {
+                "name": "employment",
+                "label": "Employment",
+                "options": (
+                    {"value": "all", "label": "All employees"},
+                    {"value": "current", "label": "Current"},
+                    {"value": "separated", "label": "Separated"},
+                ),
+            },
+        ),
+        "fields": (
+            {
+                "name": "empNo",
+                "column": "empno",
+                "label": "Employee No",
+                "maxlength": 5,
+                "required": True,
+            },
+            {
+                "name": "lastName",
+                "column": "lastname",
+                "label": "Last Name",
+                "maxlength": 15,
+                "required": False,
+            },
+            {
+                "name": "firstName",
+                "column": "firstname",
+                "label": "First Name",
+                "maxlength": 15,
+                "required": False,
+            },
+            {
+                "name": "gender",
+                "column": "gender",
+                "label": "Gender",
+                "maxlength": 1,
+                "required": False,
+                "options": (
+                    {"value": "F", "label": "Female"},
+                    {"value": "M", "label": "Male"},
+                ),
+            },
+            {
+                "name": "birthDate",
+                "column": "birthdate",
+                "label": "Birth Date",
+                "maxlength": 10,
+                "required": False,
+                "type": "date",
+            },
+            {
+                "name": "hireDate",
+                "column": "hiredate",
+                "label": "Hire Date",
+                "maxlength": 10,
+                "required": False,
+                "type": "date",
+            },
+            {
+                "name": "sepDate",
+                "column": "sepdate",
+                "label": "Separation Date",
+                "maxlength": 10,
+                "required": False,
+                "type": "date",
+            },
+        ),
+    },
     "jobs": {
         "module_slug": "jobs",
         "name": "Jobs",
@@ -291,6 +431,52 @@ RECORD_MODULES = {
             },
         ),
     },
+    "sales": {
+        "module_slug": "sales",
+        "name": "Sales",
+        "singular": "Sale",
+        "permission": "Sales",
+        "rights_module": "sales",
+        "rights_resource": "sales",
+        "rights_view_resource": "sales",
+        "table": "sales",
+        "active_view": "sales_active",
+        "key": "transno",
+        "key_field": "transNo",
+        "display_field": "transNo",
+        "allowed_actions": ("view", "create", "delete"),
+        "fields": (
+            {
+                "name": "transNo",
+                "column": "transno",
+                "label": "Transaction No",
+                "maxlength": 8,
+                "required": True,
+            },
+            {
+                "name": "salesDate",
+                "column": "salesdate",
+                "label": "Sale Date",
+                "maxlength": 10,
+                "required": True,
+                "type": "date",
+            },
+            {
+                "name": "custNo",
+                "column": "custno",
+                "label": "Customer",
+                "maxlength": 5,
+                "required": True,
+            },
+            {
+                "name": "empNo",
+                "column": "empno",
+                "label": "Salesperson",
+                "maxlength": 5,
+                "required": True,
+            },
+        ),
+    },
 }
 
 
@@ -319,6 +505,7 @@ def validate_api_csrf_token():
         or request.path.startswith("/api/sales/")
         or request.path == "/api/sales"
         or request.path.startswith("/api/users")
+        or request.path.startswith("/api/sales")
         or request.path in {"/api/logout", "/logout"}
     )
     if request.method not in {"POST", "PATCH", "DELETE"} or not protected_paths:
@@ -367,6 +554,23 @@ def get_reset_user(email):
     return next((user for user in users if user.email == email), None)
 
 
+def access_token_expiry_hint(access_token):
+    try:
+        payload_segment = access_token.split(".")[1]
+        payload_bytes = base64.urlsafe_b64decode(
+            payload_segment + "=" * (-len(payload_segment) % 4)
+        )
+        payload = json.loads(payload_bytes)
+    except (IndexError, TypeError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    expires_at = payload.get("exp")
+    if isinstance(expires_at, bool) or not isinstance(expires_at, (int, float)):
+        return None
+    return expires_at
+
+
 def get_authenticated_client():
     access_token = session.get("access_token")
     refresh_token = session.get("refresh_token")
@@ -374,23 +578,51 @@ def get_authenticated_client():
         return None
 
     client = get_supabase_client()
+    expires_at = session.get("access_token_expires_at")
+    if not isinstance(expires_at, (int, float)):
+        expires_at = access_token_expiry_hint(access_token)
+        if expires_at is not None:
+            session["access_token_expires_at"] = expires_at
+
+    # Expiry is only a refresh-timing hint. PostgREST still validates the
+    # signed token and applies RLS to every database request.
+    if isinstance(expires_at, (int, float)) and expires_at > time.time() + 60:
+        client.postgrest.auth(access_token)
+        return client
+
     try:
-        client.auth.set_session(access_token, refresh_token)
+        if isinstance(expires_at, (int, float)):
+            auth_response = client.auth.refresh_session(refresh_token)
+        else:
+            auth_response = client.auth.set_session(access_token, refresh_token)
+    except AuthRetryableError:
+        raise
     except AuthError:
         session.clear()
         return None
+    refreshed_session = auth_response.session
+    if refreshed_session is None:
+        session.clear()
+        return None
+    session["access_token"] = refreshed_session.access_token
+    session["refresh_token"] = refreshed_session.refresh_token
+    session["access_token_expires_at"] = refreshed_session.expires_at
+    client.postgrest.auth(refreshed_session.access_token)
+    refreshed_user = getattr(refreshed_session, "user", None)
+    if refreshed_user is not None:
+        session["must_set_password"] = must_set_password(refreshed_user)
     return client
 
 
-def get_current_profile(client):
-    user = client.auth.get_user().user
-    if user is None:
+def get_current_profile(client, user_id=None):
+    profile_user_id = user_id or session.get("user_id")
+    if not isinstance(profile_user_id, str) or not profile_user_id:
         return None
     response = (
         client.table("profiles")
-        .select("id, email, full_name, status, role, blocked, is_deleted, stamp, created_at")
-        .eq("id", user.id)
-        .single()
+        .select("id, email, full_name, status, role, blocked, created_at")
+        .eq("id", profile_user_id)
+        .maybe_single()
         .execute()
     )
     return response.data
@@ -424,6 +656,20 @@ def display_stamp(stamp):
     if parts[0] in action_labels:
         return f"{action_labels[parts[0]]} {parts[1]}" if len(parts) == 2 else action_labels[parts[0]]
     return stamp
+
+
+def employee_is_current(separation_date, today=None):
+    if not separation_date:
+        return True
+    if isinstance(separation_date, datetime):
+        separation_date = separation_date.date()
+    if isinstance(separation_date, date):
+        return separation_date >= (today or datetime.now(MANILA_TIMEZONE).date())
+    try:
+        parsed_date = date.fromisoformat(str(separation_date)[:10])
+    except ValueError:
+        return False
+    return parsed_date >= (today or datetime.now(MANILA_TIMEZONE).date())
 
 
 def get_management_profile():
@@ -551,7 +797,9 @@ def rights_to_permissions(catalog, assignments):
     for right in catalog:
         if right["right_code"] not in granted:
             continue
-        if right.get("resource_code") == "price_history":
+        if right.get("resource_code") in {
+            report["resource"] for report in REPORTS.values()
+        }:
             continue
         module = module_names.get(right["module_code"])
         if module is None:
@@ -568,7 +816,9 @@ def rights_to_permissions(catalog, assignments):
 def permissions_to_rights(catalog, permissions):
     selected = []
     for right in catalog:
-        if right.get("resource_code") == "price_history":
+        if right.get("resource_code") in {
+            report["resource"] for report in REPORTS.values()
+        }:
             continue
         module = {
             "customers": "Customer",
@@ -653,7 +903,7 @@ def index():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is True:
         return redirect(url_for("set_password"))
     try:
         permissions = get_permissions_for_user(client, profile)
@@ -700,6 +950,7 @@ def api_check_module_permission(module, action):
 @app.get("/products")
 @app.get("/human-resources")
 @app.get("/human-resources/jobs")
+@app.get("/human-resources/employees")
 @app.get("/sales")
 @app.get("/reports")
 def module_workspace():
@@ -713,7 +964,7 @@ def module_workspace():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is True:
         return redirect(url_for("set_password"))
 
     path_parts = request.path.strip("/").split("/")
@@ -807,6 +1058,353 @@ def module_workspace():
     ), 200 if allowed else 403
 
 
+@app.get("/human-resources/employees/<employee_no>/job-history")
+def employee_job_history(employee_no):
+    client, profile, context, _actions, error = get_employee_job_history_access(
+        employee_no, "view"
+    )
+    if error:
+        if error[1] == 401:
+            return redirect(url_for("login"))
+        if error[1] == 403:
+            return redirect(url_for("index"))
+        return error
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        jobs = (
+            client.table("job_active")
+            .select("jobcode, jobdesc")
+            .order("jobcode")
+            .execute()
+            .data or []
+        )
+        departments = (
+            client.table("department_active")
+            .select("deptcode, deptname")
+            .order("deptcode")
+            .execute()
+            .data or []
+        )
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Job history form options could not be loaded")
+        return jsonify(error="Job History, Job, or Department data needs database setup or could not be loaded."), 503
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    actions = {
+        action: is_admin or JOB_HISTORY_RIGHTS[action] in context["rights"]
+        for action in ("create", "edit", "delete")
+    }
+    return render_template(
+        "job_history.html",
+        profile=profile,
+        employee=context["employee"],
+        jobs=jobs,
+        departments=departments,
+        is_admin=is_admin,
+        actions=actions,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/human-resources/employees/<employee_no>")
+def employee_profile(employee_no):
+    client, profile, _config, _actions, error = get_record_access(
+        "employees", "view"
+    )
+    if error:
+        if error[1] == 401:
+            return redirect(url_for("login"))
+        if error[1] == 403:
+            return redirect(url_for("index"))
+        return error
+
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    employee_columns = (
+        "empno, lastname, firstname, gender, birthdate, hiredate, sepdate, is_deleted, stamp"
+        if is_admin
+        else "empno, lastname, firstname, gender, birthdate, hiredate, sepdate"
+    )
+    try:
+        employee = (
+            client.table("employee" if is_admin else "employee_active")
+            .select(employee_columns)
+            .eq("empno", employee_no)
+            .maybe_single()
+            .execute()
+            .data
+        )
+        if employee is None:
+            abort(404)
+
+        history_rights = get_job_history_rights(client, profile)
+        history = []
+        can_view_history = JOB_HISTORY_RIGHTS["view"] in history_rights
+        if can_view_history and not employee.get("is_deleted"):
+            history = (
+                client.table("jobhistory_active")
+                .select("jobcode, deptcode, effdate, salary")
+                .eq("empno", employee_no)
+                .order("effdate", desc=True)
+                .execute()
+                .data or []
+            )
+            jobs = (
+                client.table("job_active")
+                .select("jobcode, jobdesc")
+                .execute()
+                .data or []
+            )
+            departments = (
+                client.table("department_active")
+                .select("deptcode, deptname")
+                .execute()
+                .data or []
+            )
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Employee profile could not be loaded")
+        return jsonify(error="Employee profile data needs database setup or could not be loaded."), 503
+
+    today = datetime.now(MANILA_TIMEZONE).date()
+    current_history = None
+    for row in history:
+        try:
+            effective_date = date.fromisoformat(str(row.get("effdate"))[:10])
+        except ValueError:
+            continue
+        if effective_date <= today:
+            current_history = row
+            break
+    job_labels = {
+        row["jobcode"]: row.get("jobdesc")
+        for row in jobs
+    } if can_view_history and not employee.get("is_deleted") else {}
+    department_labels = {
+        row["deptcode"]: row.get("deptname")
+        for row in departments
+    } if can_view_history and not employee.get("is_deleted") else {}
+    timeline = []
+    for row in history:
+        try:
+            effective_date = date.fromisoformat(str(row.get("effdate"))[:10])
+        except ValueError:
+            continue
+        timeline.append({
+            "effDate": row.get("effdate"),
+            "jobCode": row.get("jobcode"),
+            "jobTitle": job_labels.get(row.get("jobcode")),
+            "deptCode": row.get("deptcode"),
+            "departmentName": department_labels.get(row.get("deptcode")),
+            "salary": row.get("salary"),
+            "status": (
+                "Upcoming" if effective_date > today
+                else "Current" if row is current_history and employee_is_current(employee.get("sepdate"))
+                else "Previous"
+            ),
+        })
+
+    try:
+        permissions = get_permissions_for_user(client, profile)
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Employee profile permissions could not be loaded")
+        return jsonify(error="Employee profile permissions could not be checked."), 503
+    return render_template(
+        "employee_profile.html",
+        profile=profile,
+        employee=employee,
+        timeline=timeline,
+        can_view_history=can_view_history,
+        is_current=employee_is_current(employee.get("sepdate")),
+        is_admin=is_admin,
+        sidebar_modules=module_cards(permissions),
+    )
+
+
+@app.get("/api/hr/employees/<employee_no>/job-history")
+def api_list_employee_job_history(employee_no):
+    client, profile, context, _actions, error = get_employee_job_history_access(
+        employee_no, "view"
+    )
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    columns = "empno, jobcode, deptcode, effdate, salary"
+    admin_columns = f"{columns}, is_deleted, stamp"
+    try:
+        active_rows = (
+            client.table("jobhistory_active")
+            .select(admin_columns if is_admin else columns)
+            .eq("empno", employee_no)
+            .order("effdate", desc=True)
+            .execute()
+            .data or []
+        )
+        inactive_rows = []
+        if is_admin:
+            inactive_rows = (
+                client.table("jobhistory")
+                .select(admin_columns)
+                .eq("empno", employee_no)
+                .eq("is_deleted", True)
+                .order("effdate", desc=True)
+                .execute()
+                .data or []
+            )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    rows = (
+        active_rows if status_filter == "active"
+        else inactive_rows if status_filter == "inactive"
+        else active_rows + inactive_rows
+    )
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if any(
+                search in str(row.get(column) or "").casefold()
+                for column in ("jobcode", "deptcode", "effdate", "salary")
+            )
+        ]
+    return jsonify(
+        employee={
+            "empNo": context["employee"]["empno"],
+            "name": " ".join(
+                part for part in (
+                    context["employee"].get("firstname"),
+                    context["employee"].get("lastname"),
+                ) if part
+            ),
+        },
+        records=[job_history_response_record(row, is_admin) for row in rows],
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            action: is_admin or JOB_HISTORY_RIGHTS[action] in context["rights"]
+            for action in ("create", "edit", "delete")
+        },
+    )
+
+
+@app.post("/api/hr/employees/<employee_no>/job-history")
+def api_create_employee_job_history(employee_no):
+    client, profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "create"
+    )
+    if error:
+        return error
+    values, validation_error = job_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    relation_error = validate_job_history_relations(client, values)
+    if relation_error:
+        return relation_error
+    values["empno"] = employee_no
+    try:
+        response = client.table("jobhistory").insert(values).execute()
+    except APIError as error:
+        if error.code == "23503":
+            return jsonify(error="Choose an active Job and, if provided, Department."), 400
+        if error.code in {"23505", "P0001"}:
+            return jsonify(error="An active job-history record already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Job History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Job History could not be created."), 502
+    return jsonify(
+        message="Job history added.",
+        record=job_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        ),
+    ), 201
+
+
+@app.patch("/api/hr/employees/<employee_no>/job-history/<effective_date>")
+def api_edit_employee_job_history(employee_no, effective_date):
+    client, profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "edit"
+    )
+    if error:
+        return error
+    if not is_iso_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    values, validation_error = job_history_form_values(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    relation_error = validate_job_history_relations(client, values)
+    if relation_error:
+        return relation_error
+    try:
+        current = (
+            client.table("jobhistory")
+            .select("is_deleted")
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .maybe_single()
+            .execute()
+        )
+        if current.data is None:
+            return jsonify(error="Active job-history record not found."), 404
+        response = (
+            client.table("jobhistory")
+            .update(values)
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except APIError as error:
+        if error.code == "23503":
+            return jsonify(error="Choose an active Job and, if provided, Department."), 400
+        if error.code in {"23505", "P0001"}:
+            return jsonify(error="An active job-history record already exists for that effective date."), 409
+        return record_error_response(error, {"name": "Job History"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Active job-history record not found."), 404
+    return jsonify(
+        message="Job history updated.",
+        record=job_history_response_record(
+            response.data[0], profile["role"] in {"admin", "superadmin"}
+        ),
+    )
+
+
+@app.patch("/api/hr/employees/<employee_no>/job-history/<effective_date>/delete")
+def api_delete_employee_job_history(employee_no, effective_date):
+    client, _profile, _context, _actions, error = get_employee_job_history_access(
+        employee_no, "delete"
+    )
+    if error:
+        return error
+    if not is_iso_date(effective_date):
+        return jsonify(error="Enter a valid effective date."), 400
+    try:
+        response = (
+            client.table("jobhistory")
+            .update({"is_deleted": True})
+            .eq("empno", employee_no)
+            .eq("effdate", effective_date)
+            .eq("is_deleted", False)
+            .execute()
+        )
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Job History"})
+    if not response.data:
+        return jsonify(error="Active job-history record not found."), 404
+    return jsonify(message="Job history moved to Inactive.")
+
+
 @app.get("/user-management")
 def user_management():
     client, profile = get_management_profile()
@@ -827,20 +1425,155 @@ def user_management():
     )
 
 
+@app.get("/audit-log")
+def audit_log_viewer():
+    client, profile = get_management_profile()
+    if client is None:
+        return redirect(url_for("login"))
+    if profile is None or profile.get("role") != "superadmin":
+        abort(403)
+    try:
+        sidebar_modules = module_cards(get_permissions_for_user(client, profile))
+    except (APIError, httpx.HTTPError, KeyError, TypeError):
+        app.logger.exception("Sidebar permissions could not be loaded")
+        sidebar_modules = []
+    return render_template(
+        "audit_log.html",
+        profile=profile,
+        sidebar_modules=sidebar_modules,
+    )
+
+
+def parse_audit_log_filters(args):
+    search = args.get("search", "").strip()
+    if len(search) > 200:
+        return None, "Search must be 200 characters or fewer."
+    try:
+        page = int(args.get("page", "1"))
+    except (TypeError, ValueError):
+        return None, "Choose a valid page."
+    if page < 1 or page > 20001:
+        return None, "Choose a valid page."
+    page_size = 50
+    return {
+        "search": search,
+        "page": page,
+        "page_size": page_size,
+        "offset": (page - 1) * page_size,
+    }, None
+
+
+@app.get("/api/audit-log")
+def api_audit_log():
+    try:
+        client, profile = get_management_profile()
+    except (APIError, httpx.HTTPError, RuntimeError):
+        app.logger.exception("Audit log access could not be checked")
+        return jsonify(error="Audit log access could not be checked. Try again shortly."), 503
+    if client is None:
+        return jsonify(error="You must be logged in."), 401
+    if profile is None or profile.get("role") != "superadmin":
+        return jsonify(error="Superadmin access is required."), 403
+    filters, validation_error = parse_audit_log_filters(request.args)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_read_audit_log",
+            {
+                "p_search": filters["search"],
+                "p_limit": filters["page_size"],
+                "p_offset": filters["offset"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="Superadmin access is required."), 403
+        return record_error_response(error, {"name": "Audit log"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Audit log"})
+    data = response.data
+    if (
+        not isinstance(data, Mapping)
+        or not isinstance(data.get("rows"), list)
+        or not isinstance(data.get("total"), int)
+    ):
+        app.logger.error("Audit log RPC returned an invalid response")
+        return jsonify(error="Audit log could not be loaded."), 502
+    return jsonify(
+        rows=data["rows"],
+        total=data["total"],
+        page=filters["page"],
+        pageSize=filters["page_size"],
+    )
+
+
 def get_record_access(module_slug, action):
-    client = get_authenticated_client()
+    try:
+        client = get_authenticated_client()
+    except AuthRetryableError:
+        app.logger.exception("Supabase session refresh is temporarily unavailable")
+        return None, None, None, None, (
+            jsonify(error="The sign-in service could not refresh your session. Try again shortly; you do not need to sign in again yet."),
+            503,
+        )
+    except (APIError, httpx.HTTPError, RuntimeError):
+        app.logger.exception("Record session could not be validated")
+        return None, None, None, None, (
+            jsonify(error="The sign-in service could not verify your session right now. Try again shortly."),
+            503,
+        )
     if client is None:
         return None, None, None, None, (jsonify(error="You must be logged in."), 401)
-    profile = get_current_profile(client)
+    try:
+        profile = get_current_profile(client)
+    except AuthRetryableError:
+        app.logger.exception("Record session validation is temporarily unavailable")
+        return None, None, None, None, (
+            jsonify(error="Your session could not be verified right now. Try again shortly."),
+            503,
+        )
+    except AuthError:
+        session.clear()
+        return None, None, None, None, (
+            jsonify(error="Your session expired. Sign in again and retry."),
+            401,
+        )
+    except APIError as error:
+        app.logger.exception("Record profile could not be loaded")
+        if error.code == "PGRST116":
+            message = "No application profile was found for this signed-in account. Ask an administrator to check the profile record."
+        else:
+            message = (
+                "Your account profile could not be loaded "
+                f"(database error {error.code or 'unknown'}). Check the server log for details."
+            )
+        return None, None, None, None, (jsonify(error=message), 503)
+    except (httpx.HTTPError, RuntimeError):
+        app.logger.exception("Record profile could not be loaded")
+        return None, None, None, None, (
+            jsonify(error="The account profile service is temporarily unavailable. Try again shortly."),
+            503,
+        )
+    if profile is None:
+        return None, None, None, None, (
+            jsonify(error="No application profile was found for this signed-in account. Ask an administrator to check the profile record."),
+            403,
+        )
     if not profile_is_active(profile):
         return None, None, None, None, (jsonify(error="This account is not active."), 403)
     config = RECORD_MODULES.get(module_slug)
     if config is None:
         return None, None, None, None, (jsonify(error="Unknown module."), 404)
+    if action not in config.get("allowed_actions", RIGHTS_ACTIONS):
+        return None, None, None, None, (
+            jsonify(error=f"{action.title()} is not available for {config['name'].lower()} records."),
+            403,
+        )
     try:
         permissions = get_permissions_for_user(client, profile)
         actions = get_record_actions(client, profile, config, permissions)
-    except (APIError, httpx.HTTPError):
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
         app.logger.exception("Record permissions could not be loaded")
         return None, None, None, None, (
             jsonify(error="Module access needs database setup or could not be checked."),
@@ -913,10 +1646,267 @@ def get_record_actions(client, profile, config, permissions):
     }
 
 
+def parse_sale_header(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {
+        "salesDate", "customerNo", "employeeNo"
+    }:
+        return None, "Enter a sale date, customer, and salesperson."
+    sale_date = payload.get("salesDate")
+    if not isinstance(sale_date, str):
+        return None, "Enter a valid sale date."
+    try:
+        parsed_date = date.fromisoformat(sale_date)
+    except ValueError:
+        return None, "Enter a valid sale date."
+    if parsed_date.isoformat() != sale_date:
+        return None, "Enter a valid sale date."
+    customer_no = payload.get("customerNo")
+    employee_no = payload.get("employeeNo")
+    if not isinstance(customer_no, str) or not customer_no.strip() or len(customer_no.strip()) > 5:
+        return None, "Choose a valid customer."
+    if not isinstance(employee_no, str) or not employee_no.strip() or len(employee_no.strip()) > 5:
+        return None, "Choose a valid salesperson."
+    return {
+        "salesdate": parsed_date.isoformat(),
+        "custno": customer_no.strip(),
+        "empno": employee_no.strip(),
+    }, None
+
+
+def parse_sale_detail(payload):
+    expected_fields = {"productCode", "quantity"}
+    if not isinstance(payload, Mapping) or set(payload) != expected_fields:
+        return None, "Enter a product and quantity."
+    product_code = payload.get("productCode")
+    if (
+        not isinstance(product_code, str)
+        or not product_code.strip()
+        or len(product_code.strip()) > 6
+    ):
+        return None, "Choose a valid product."
+    quantity = payload.get("quantity")
+    if not isinstance(quantity, (str, int, float, Decimal)) or isinstance(quantity, bool):
+        return None, "Enter a valid quantity."
+    try:
+        parsed_quantity = Decimal(str(quantity))
+    except InvalidOperation:
+        return None, "Enter a valid quantity."
+    if (
+        not parsed_quantity.is_finite()
+        or parsed_quantity <= 0
+        or parsed_quantity.as_tuple().exponent < -2
+        or parsed_quantity >= Decimal("100000000")
+    ):
+        return None, (
+            "Quantity must be greater than zero, fit within eight integer digits, "
+            "and have at most two decimal places."
+        )
+    return {
+        "product_code": product_code.strip(),
+        "quantity": format(parsed_quantity, "f"),
+    }, None
+
+
+def parse_sale_payment(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {"paymentDate", "amount"}:
+        return None, "Enter a payment date and amount."
+    payment_date = payload.get("paymentDate")
+    if not isinstance(payment_date, str):
+        return None, "Enter a valid payment date."
+    try:
+        parsed_date = date.fromisoformat(payment_date)
+    except ValueError:
+        return None, "Enter a valid payment date."
+    if parsed_date.isoformat() != payment_date:
+        return None, "Enter a valid payment date."
+
+    amount = payload.get("amount")
+    if not isinstance(amount, (str, int, float, Decimal)) or isinstance(amount, bool):
+        return None, "Enter a valid payment amount."
+    try:
+        parsed_amount = Decimal(str(amount))
+    except InvalidOperation:
+        return None, "Enter a valid payment amount."
+    if (
+        not parsed_amount.is_finite()
+        or parsed_amount <= 0
+        or parsed_amount.as_tuple().exponent < -2
+        or parsed_amount >= Decimal("100000000")
+    ):
+        return None, (
+            "Payment must be greater than zero, fit within eight integer digits, "
+            "and have at most two decimal places."
+        )
+    return {
+        "payment_date": parsed_date.isoformat(),
+        "amount": format(parsed_amount, "f"),
+    }, None
+
+
+def sales_detail_error_response(error):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            return jsonify(error="You do not have permission for this Sales Detail action."), 403
+        if error.code == "22023":
+            message = str(error).lower()
+            if "price" in message:
+                return jsonify(error="No active price is available for this product on the sale date."), 400
+            return jsonify(error="Choose an active product and enter a valid quantity."), 400
+        if error.code == "23505":
+            return jsonify(error="This product is already on the sale. Edit its existing line instead."), 409
+        if error.code == "P0002":
+            return jsonify(error="The sale or line item is no longer active."), 404
+    return record_error_response(error, {"name": "Sales detail"})
+
+
+def sales_payment_error_response(error):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            return jsonify(error="Sales View and Add permissions are required to record a payment."), 403
+        if error.code == "22023":
+            return jsonify(error="Enter a valid payment date and amount for an active sale."), 400
+        if error.code == "P0002":
+            return jsonify(error="The active sale could not be found."), 404
+        if error.code == "P0001" and "receipt number" in str(error).lower():
+            return jsonify(error="A receipt number could not be allocated. Contact an administrator."), 503
+    return record_error_response(error, {"name": "Sales payment"})
+
+
+def sales_status_error_response(error, action):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            message = (
+                "Only administrators with Sales Delete permission can restore a sale."
+                if action == "restore"
+                else "Sales Delete permission is required."
+            )
+            return jsonify(error=message), 403
+        if error.code == "P0002":
+            return jsonify(error=f"The sale could not be {action}d because its status changed."), 404
+        if error.code == "22023":
+            return jsonify(error="A valid transaction number is required."), 400
+    return record_error_response(error, {"name": "Sales"})
+
+
+def get_report_rights(client, profile):
+    if profile["role"] in {"admin", "superadmin"}:
+        return list(REPORTS)
+    right_codes = [report["right"] for report in REPORTS.values()]
+    assignments = (
+        client.table("user_permission")
+        .select("right_code")
+        .eq("user_id", profile["id"])
+        .eq("is_deleted", False)
+        .in_("right_code", right_codes)
+        .execute()
+    )
+    granted = {row["right_code"] for row in assignments.data or []}
+    return [
+        slug for slug, report in REPORTS.items()
+        if report["right"] in granted
+    ]
+
+
+def parse_report_filters(report_slug, query):
+    filters = {"start_date": None, "end_date": None, "top_n": 10, "employee_no": None}
+    report = REPORTS[report_slug]
+    if "date_range" in report["filters"]:
+        start_value = query.get("startDate")
+        end_value = query.get("endDate")
+        try:
+            start_date = date.fromisoformat(start_value or "")
+            end_date = date.fromisoformat(end_value or "")
+        except ValueError:
+            return None, "Enter a valid start and end date."
+        if start_date.isoformat() != start_value or end_date.isoformat() != end_value:
+            return None, "Enter a valid start and end date."
+        if end_date < start_date:
+            return None, "End date must be on or after the start date."
+        filters["start_date"] = start_date.isoformat()
+        filters["end_date"] = end_date.isoformat()
+        raw_top_n = query.get("topN", "10")
+        if not raw_top_n.isdecimal():
+            return None, "Top N must be a whole number between 1 and 100."
+        top_n = int(raw_top_n)
+        if not 1 <= top_n <= 100:
+            return None, "Top N must be a whole number between 1 and 100."
+        filters["top_n"] = top_n
+    if "employee" in report["filters"]:
+        employee_no = query.get("employeeNo", "").strip()
+        if len(employee_no) > 5:
+            return None, "Choose a valid employee."
+        filters["employee_no"] = employee_no or None
+    return filters, None
+
+
+def get_report_access(report_slug):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, (jsonify(error="You must be logged in."), 401)
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, (jsonify(error="This account is not active."), 403)
+    report = REPORTS.get(report_slug)
+    if report is None:
+        return None, None, None, (jsonify(error="Unknown report."), 404)
+    try:
+        permissions = get_permissions_for_user(client, profile)
+        if not has_permission(permissions, "Reports", "view"):
+            return None, None, None, (jsonify(error="Reports View access is required."), 403)
+        granted_reports = get_report_rights(client, profile)
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+        app.logger.exception("Report permissions could not be loaded")
+        return None, None, None, (
+            jsonify(error="Report permissions need database setup or could not be checked."),
+            503,
+        )
+    if report_slug not in granted_reports:
+        return None, None, None, (jsonify(error="You do not have permission to view this report."), 403)
+    return client, profile, report, None
+
+
 def record_error_response(error, config):
     app.logger.exception("Record request could not be completed")
-    if isinstance(error, (APIError, RuntimeError)):
-        return jsonify(error=f"{config['name']} data needs database setup or is blocked by access policies."), 503
+    if isinstance(error, APIError):
+        error_code = getattr(error, "code", None)
+        if error_code == "42501":
+            message = (
+                f"{config['name']} access was denied by a database policy or missing permission. "
+                "Check this account's rights and the table's Row Level Security policies."
+            )
+            status = 403
+        elif error_code in {"42P01", "PGRST205"}:
+            message = (
+                f"{config['name']} database setup is missing a required table or view. "
+                "Apply the required migrations."
+            )
+            status = 503
+        elif error_code in {"42703", "PGRST200", "PGRST204"}:
+            message = (
+                f"{config['name']} database returned schema error {error_code}. "
+                "Check the server log for the missing column or relationship and verify the corresponding migration."
+            )
+            status = 503
+        elif error_code == "23505":
+            message = f"A {config['singular'].lower()} with that code already exists."
+            status = 409
+        elif error_code in {"23502", "23503", "23514"}:
+            message = (
+                f"{config['singular']} details do not satisfy the database requirements. "
+                "Check required fields and linked records."
+            )
+            status = 400
+        else:
+            message = (
+                f"{config['name']} data could not be saved or loaded. "
+                "Check database migrations, access policies, and the server log."
+            )
+            status = 503
+        return jsonify(error=message), status
+    if isinstance(error, RuntimeError):
+        return jsonify(
+            error=f"{config['name']} database connection is not configured correctly."
+        ), 503
     return jsonify(error=f"{config['name']} request could not be completed. Please try again."), 502
 
 
@@ -941,8 +1931,20 @@ def record_form_values(config, payload, editing=False):
             return None, f"{field['label']} is required."
         if len(value) > field["maxlength"]:
             return None, f"{field['label']} must be {field['maxlength']} characters or fewer."
-        if field.get("options") and value not in field["options"]:
+        options = field.get("options", ())
+        option_values = {
+            option["value"] if isinstance(option, Mapping) else option
+            for option in options
+        }
+        if options and value and value not in option_values:
             return None, f"Choose valid {field['label'].lower()}."
+        if value and field.get("type") == "date":
+            try:
+                parsed_date = date.fromisoformat(value)
+            except ValueError:
+                return None, f"Enter a valid {field['label'].lower()}."
+            if parsed_date.isoformat() != value:
+                return None, f"Enter a valid {field['label'].lower()}."
         values[field["column"]] = value or None
     return values, None
 
@@ -965,6 +1967,155 @@ PRICE_HISTORY_RIGHTS = {
     "edit": "products.priceHistory.edit",
     "delete": "products.priceHistory.delete",
 }
+JOB_HISTORY_RIGHTS = {
+    "view": "hr.jobHistory.view",
+    "create": "hr.jobHistory.add",
+    "edit": "hr.jobHistory.edit",
+    "delete": "hr.jobHistory.delete",
+}
+
+
+def get_job_history_rights(client, profile):
+    if profile["role"] in {"admin", "superadmin"}:
+        return set(JOB_HISTORY_RIGHTS.values())
+    assignments = (
+        client.table("user_permission")
+        .select("right_code")
+        .eq("user_id", profile["id"])
+        .eq("is_deleted", False)
+        .in_("right_code", list(JOB_HISTORY_RIGHTS.values()))
+        .execute()
+    )
+    return {row["right_code"] for row in assignments.data or []}
+
+
+def get_employee_job_history_access(employee_no, action):
+    client = get_authenticated_client()
+    if client is None:
+        return None, None, None, None, (jsonify(error="You must be logged in."), 401)
+    profile = get_current_profile(client)
+    if not profile_is_active(profile):
+        return None, None, None, None, (jsonify(error="This account is not active."), 403)
+    if action not in JOB_HISTORY_RIGHTS:
+        return None, None, None, None, (jsonify(error="Unknown job history action."), 400)
+    try:
+        employee = (
+            client.table("employee")
+            .select("empno, lastname, firstname, is_deleted")
+            .eq("empno", employee_no)
+            .maybe_single()
+            .execute()
+            .data
+        )
+        if employee is None:
+            return None, None, None, None, (jsonify(error="Employee not found."), 404)
+        rights = get_job_history_rights(client, profile)
+    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError) as error:
+        app.logger.exception("Job history access could not be checked")
+        return None, None, None, None, (
+            jsonify(error="Job History rights or employee data need database setup or could not be checked."),
+            503,
+        )
+    if JOB_HISTORY_RIGHTS["view"] not in rights:
+        return None, None, None, None, (
+            jsonify(error="Job History view permission is required."),
+            403,
+        )
+    if action != "view" and JOB_HISTORY_RIGHTS[action] not in rights:
+        return None, None, None, None, (
+            jsonify(error=f"Job History {action} permission is required."),
+            403,
+        )
+    if action != "view" and employee.get("is_deleted"):
+        return None, None, None, None, (
+            jsonify(error="Restore this employee before changing job history."),
+            409,
+        )
+    return client, profile, {"employee": employee, "rights": rights}, None, None
+
+
+def job_history_form_values(payload):
+    fields = {"effDate", "jobCode", "deptCode", "salary"}
+    if not isinstance(payload, Mapping) or set(payload) != fields:
+        return None, "Enter an effective date, job, department, and salary."
+    effective_date = payload.get("effDate")
+    if not isinstance(effective_date, str):
+        return None, "Enter a valid effective date."
+    try:
+        parsed_date = date.fromisoformat(effective_date)
+    except ValueError:
+        return None, "Enter a valid effective date."
+    if parsed_date.isoformat() != effective_date:
+        return None, "Enter a valid effective date."
+    job_code = payload.get("jobCode")
+    department_code = payload.get("deptCode")
+    if not isinstance(job_code, str) or not job_code.strip() or len(job_code.strip()) > 4:
+        return None, "Choose a valid job."
+    if not isinstance(department_code, str) or len(department_code.strip()) > 4:
+        return None, "Choose a valid department."
+    raw_salary = payload.get("salary")
+    if not isinstance(raw_salary, str):
+        return None, "Enter a valid salary."
+    try:
+        salary = Decimal(raw_salary)
+    except InvalidOperation:
+        return None, "Enter a valid salary."
+    if (
+        not salary.is_finite()
+        or salary < 0
+        or salary.as_tuple().exponent < -2
+        or salary > Decimal("99999999.99")
+    ):
+        return None, "Salary must be zero or more and have at most 2 decimal places."
+    return {
+        "effdate": parsed_date.isoformat(),
+        "jobcode": job_code.strip(),
+        "deptcode": department_code.strip() or None,
+        "salary": format(salary.quantize(Decimal("0.01")), "f"),
+    }, None
+
+
+def validate_job_history_relations(client, values):
+    try:
+        job = (
+            client.table("job_active")
+            .select("jobcode")
+            .eq("jobcode", values["jobcode"])
+            .maybe_single()
+            .execute()
+        )
+        if job.data is None:
+            return jsonify(error="Choose an active Job."), 400
+        if values["deptcode"]:
+            department = (
+                client.table("department_active")
+                .select("deptcode")
+                .eq("deptcode", values["deptcode"])
+                .maybe_single()
+                .execute()
+            )
+            if department.data is None:
+                return jsonify(error="Choose an active Department."), 400
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        app.logger.exception("Job history Job/Department choices could not be verified")
+        return jsonify(error="Job and Department choices could not be verified."), 503
+    return None
+
+
+def job_history_response_record(row, is_admin):
+    record = {
+        "empNo": row.get("empno"),
+        "jobCode": row.get("jobcode"),
+        "effDate": row.get("effdate"),
+        "salary": row.get("salary"),
+        "deptCode": row.get("deptcode"),
+    }
+    if is_admin:
+        record.update(
+            isDeleted=row.get("is_deleted") is True,
+            stamp=display_stamp(row.get("stamp")),
+        )
+    return record
 
 
 def get_price_history_access(product_code, action):
@@ -1072,7 +2223,7 @@ def price_history_form_values(payload):
     }, None
 
 
-def is_price_history_date(value):
+def is_iso_date(value):
     if not isinstance(value, str):
         return False
     try:
@@ -1215,7 +2366,7 @@ def api_edit_price_history(product_code, effective_date):
     client, profile, _context, error = get_price_history_access(product_code, "edit")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     values, validation_error = price_history_form_values(get_user_payload())
     if validation_error:
@@ -1261,7 +2412,7 @@ def api_delete_price_history(product_code, effective_date):
     client, _profile, _context, error = get_price_history_access(product_code, "delete")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     try:
         response = (
@@ -1284,7 +2435,7 @@ def api_restore_price_history(product_code, effective_date):
     client, profile, _context, error = get_price_history_access(product_code, "delete")
     if error:
         return error
-    if not is_price_history_date(effective_date):
+    if not is_iso_date(effective_date):
         return jsonify(error="Enter a valid effective date."), 400
     if profile["role"] not in {"admin", "superadmin"}:
         return jsonify(error="Only administrators can restore inactive price history."), 403
@@ -1313,6 +2464,14 @@ def api_list_records(module_slug):
     requested_status = request.args.get("status", "active")
     if requested_status not in {"active", "inactive", "all"}:
         return jsonify(error="Choose Active, Inactive, or All."), 400
+    employee_gender = request.args.get("gender", "all")
+    employee_status = request.args.get("employment", "all")
+    if module_slug == "employees":
+        if employee_gender not in {"all", "F", "M"}:
+            return jsonify(error="Choose a valid gender filter."), 400
+        if employee_status not in {"all", "current", "separated"}:
+            return jsonify(error="Choose a valid employment filter."), 400
+
     is_admin = profile["role"] in {"admin", "superadmin"}
     status_filter = requested_status if is_admin else "active"
     business_columns = [field["column"] for field in config["fields"]]
@@ -1338,23 +2497,6 @@ def api_list_records(module_slug):
             else inactive_rows if status_filter == "inactive"
             else active_rows + inactive_rows
         )
-        current_prices = {}
-        if module_slug == "products":
-            product_codes = list({row["prodcode"] for row in rows})
-            if product_codes:
-                price_response = (
-                    client.table("pricehist_current")
-                    .select("prodcode, effdate, unitprice")
-                    .in_("prodcode", product_codes)
-                    .execute()
-                )
-                current_prices = {
-                    row["prodcode"]: {
-                        "unitPrice": row["unitprice"],
-                        "effectiveDate": row["effdate"],
-                    }
-                    for row in price_response.data or []
-                }
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return record_error_response(error, config)
 
@@ -1364,6 +2506,15 @@ def api_list_records(module_slug):
             row for row in rows
             if any(search in str(row.get(column) or "").casefold() for column in business_columns)
         ]
+    if module_slug == "employees":
+        if employee_gender != "all":
+            rows = [row for row in rows if row.get("gender") == employee_gender]
+        if employee_status != "all":
+            is_current = employee_status == "current"
+            rows = [
+                row for row in rows
+                if employee_is_current(row.get("sepdate")) is is_current
+            ]
     records = [
         record_response_record(row, config, is_admin)
         for row in rows
@@ -1379,16 +2530,423 @@ def api_list_records(module_slug):
                 row["prodcode"]: row["unitprice"]
                 for row in (prices.data or [])
             }
-        except (APIError, httpx.HTTPError, RuntimeError):
-            price_map = {}
+        except (APIError, httpx.HTTPError, RuntimeError) as error:
+            return record_error_response(error, config)
+        except (KeyError, TypeError):
+            app.logger.exception("Current product prices returned an invalid response")
+            return jsonify(
+                error="Product prices could not be loaded because the database returned an invalid response."
+            ), 502
         for record in records:
             record["currentPrice"] = price_map.get(record.get("prodCode"))
+    response_actions = {
+        action: (
+            actions[action]
+            and action in config.get("allowed_actions", RIGHTS_ACTIONS)
+        )
+        for action in ("create", "edit", "delete")
+    }
+    if module_slug == "employees":
+        try:
+            history_rights = get_job_history_rights(client, profile)
+        except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
+            app.logger.exception("Employee Job History rights could not be loaded")
+            return jsonify(error="Job History permissions need database setup or could not be checked."), 503
+        response_actions["jobHistoryView"] = (
+            JOB_HISTORY_RIGHTS["view"] in history_rights
+        )
+        response_actions["profileView"] = True
     return jsonify(
         records=records,
         counts=counts if is_admin else None,
         is_admin=is_admin,
-        actions={action: actions[action] for action in ("create", "edit", "delete")},
+        actions=response_actions,
     )
+
+
+@app.get("/api/sales/options")
+def api_sales_options():
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc("hope_sales_form_options").execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Sales"})
+    options = response.data
+    if not isinstance(options, Mapping):
+        app.logger.error("Sales form options RPC returned an invalid response")
+        return jsonify(error="Sales form choices could not be loaded."), 502
+    return jsonify(
+        customers=options.get("customers", []),
+        salespeople=options.get("salespeople", []),
+    )
+
+
+@app.get("/api/reports/<report_slug>")
+def api_run_report(report_slug):
+    client, _profile, _report, error = get_report_access(report_slug)
+    if error:
+        return error
+    filters, validation_error = parse_report_filters(report_slug, request.args)
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_run_report",
+            {
+                "p_report": report_slug,
+                "p_start_date": filters["start_date"],
+                "p_end_date": filters["end_date"],
+                "p_top_n": filters["top_n"],
+                "p_empno": filters["employee_no"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="You do not have permission to view this report."), 403
+        if error.code == "P0002":
+            return jsonify(error="Choose an active employee."), 404
+        return record_error_response(error, {"name": "Report"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Report"})
+    if not isinstance(response.data, Mapping) or not isinstance(response.data.get("rows"), list):
+        app.logger.error("Report RPC returned an invalid response for %s", report_slug)
+        return jsonify(error="Report data could not be loaded."), 502
+    return jsonify(
+        report=report_slug,
+        title=REPORTS[report_slug]["name"],
+        rows=response.data["rows"],
+        employeeOptions=response.data.get("employeeOptions", []),
+    )
+
+
+@app.get("/api/sales")
+def api_list_sales():
+    client, profile, config, actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    requested_status = request.args.get("status", "active")
+    if requested_status not in {"active", "inactive", "all"}:
+        return jsonify(error="Choose Active, Inactive, or All."), 400
+    is_admin = profile["role"] in {"admin", "superadmin"}
+    status_filter = requested_status if is_admin else "active"
+    fields = config["fields"]
+    business_columns = [field["column"] for field in fields]
+    admin_columns = ", ".join(business_columns + ["is_deleted", "stamp"])
+    try:
+        balance_response = client.rpc("hope_sales_balance_data").execute()
+        active_rows = (
+            client.table("sales_active")
+            .select(", ".join(business_columns))
+            .order("salesdate", desc=True)
+            .execute()
+            .data or []
+        )
+        inactive_rows = []
+        if is_admin:
+            inactive_rows = (
+                client.table("sales")
+                .select(admin_columns)
+                .eq("is_deleted", True)
+                .order("salesdate", desc=True)
+                .execute()
+                .data or []
+            )
+        options_response = client.rpc("hope_sales_form_options").execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, config)
+    options = options_response.data
+    if not isinstance(options, Mapping):
+        app.logger.error("Sales form options RPC returned an invalid response")
+        return jsonify(error="Sales list choices could not be loaded."), 502
+    customers = options.get("customers", [])
+    salespeople = options.get("salespeople", [])
+    if not isinstance(customers, list) or not isinstance(salespeople, list):
+        app.logger.error("Sales form options RPC returned invalid customer or salesperson lists")
+        return jsonify(error="Sales list choices could not be loaded."), 502
+    balances = balance_response.data
+    if (
+        not isinstance(balances, Mapping)
+        or not isinstance(balances.get("transactions"), list)
+        or not isinstance(balances.get("customers"), list)
+    ):
+        app.logger.error("Sales balance RPC returned an invalid response")
+        return jsonify(error="Sales balances could not be loaded."), 502
+    transaction_balances = {
+        row.get("transactionNo"): row
+        for row in balances["transactions"]
+        if isinstance(row, Mapping) and isinstance(row.get("transactionNo"), str)
+    }
+    customer_names = {
+        row["customerNo"]: row.get("customerName")
+        for row in customers
+    }
+    salesperson_names = {
+        row["employeeNo"]: row.get("fullName")
+        for row in salespeople
+    }
+    counts = {
+        "active": len(active_rows),
+        "inactive": len(inactive_rows),
+        "all": len(active_rows) + len(inactive_rows),
+    }
+    rows = (
+        active_rows if status_filter == "active"
+        else inactive_rows if status_filter == "inactive"
+        else active_rows + inactive_rows
+    )
+    search = request.args.get("search", "").strip().casefold()
+    if search:
+        rows = [
+            row for row in rows
+            if search in str(row.get("transno") or "").casefold()
+            or search in str(row.get("salesdate") or "").casefold()
+            or search in str(customer_names.get(row.get("custno")) or "").casefold()
+            or search in str(salesperson_names.get(row.get("empno")) or "").casefold()
+            or search in str(row.get("custno") or "").casefold()
+            or search in str(row.get("empno") or "").casefold()
+        ]
+    records = []
+    for row in rows:
+        record = record_response_record(row, config, is_admin)
+        record["customerName"] = customer_names.get(row.get("custno"))
+        record["salespersonName"] = salesperson_names.get(row.get("empno"))
+        balance = transaction_balances.get(row.get("transno"))
+        record["totalAmount"] = balance.get("totalAmount") if balance else None
+        record["totalPaid"] = balance.get("totalPaid") if balance else None
+        record["balance"] = balance.get("balance") if balance else None
+        record["paymentStatus"] = balance.get("status") if balance else None
+        records.append(record)
+    return jsonify(
+        records=records,
+        customerBalances=balances["customers"],
+        customers=customers,
+        salespeople=salespeople,
+        counts=counts if is_admin else None,
+        is_admin=is_admin,
+        actions={
+            "create": actions["create"],
+            "delete": actions["delete"],
+            "restore": is_admin and actions["delete"],
+            "saleDetails": options.get("saleDetailActions"),
+        },
+    )
+
+
+@app.patch("/api/sales/<trans_no>/delete")
+def api_delete_sale(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "delete")
+    if error:
+        return error
+    try:
+        client.rpc("hope_set_sale_deleted", {
+            "p_transno": trans_no,
+            "p_is_deleted": True,
+        }).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_status_error_response(error, "delete")
+    return jsonify(message=f"Sale {trans_no} moved to Inactive.")
+
+
+@app.patch("/api/sales/<trans_no>/restore")
+def api_restore_sale(trans_no):
+    client, profile, _config, _actions, error = get_record_access("sales", "delete")
+    if error:
+        return error
+    if profile["role"] not in {"admin", "superadmin"}:
+        return jsonify(error="Only administrators can restore inactive sales."), 403
+    try:
+        client.rpc("hope_set_sale_deleted", {
+            "p_transno": trans_no,
+            "p_is_deleted": False,
+        }).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_status_error_response(error, "restore")
+    return jsonify(message=f"Sale {trans_no} restored.")
+
+
+@app.post("/api/sales")
+def api_create_sale():
+    client, _profile, _config, _actions, error = get_record_access("sales", "create")
+    if error:
+        return error
+    values, validation_error = parse_sale_header(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_create_sale",
+            {
+                "p_salesdate": values["salesdate"],
+                "p_custno": values["custno"],
+                "p_empno": values["empno"],
+            },
+        ).execute()
+    except APIError as error:
+        if error.code == "42501":
+            return jsonify(error="Sales Add permission is required."), 403
+        if error.code == "22023":
+            return jsonify(error="Choose an active customer and salesperson."), 400
+        if error.code == "P0001" and "transaction number" in str(error).lower():
+            return jsonify(error="A transaction number could not be allocated. Contact an administrator."), 503
+        return record_error_response(error, {"name": "Sales"})
+    except (httpx.HTTPError, RuntimeError) as error:
+        return record_error_response(error, {"name": "Sales"})
+    data = response.data
+    transaction_no = (
+        data[0].get("transno")
+        if isinstance(data, list) and data and isinstance(data[0], Mapping)
+        else data.get("transno")
+        if isinstance(data, Mapping)
+        else data
+        if isinstance(data, str)
+        else None
+    )
+    if not isinstance(transaction_no, str):
+        app.logger.error("Sale creation RPC returned no transaction number")
+        return jsonify(error="Sale could not be created."), 502
+    return jsonify(
+        message=f"Sale {transaction_no} created.",
+        transactionNo=transaction_no,
+    ), 201
+
+
+@app.get("/api/sales/<trans_no>/details")
+def api_sale_details(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc(
+            "hope_sales_details_data",
+            {"p_transno": trans_no},
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    if not isinstance(response.data, Mapping):
+        app.logger.error("Sales detail data RPC returned an invalid response")
+        return jsonify(error="Sale details could not be loaded."), 502
+    return jsonify(response.data)
+
+
+@app.post("/api/sales/<trans_no>/details")
+def api_add_sale_detail(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    values, validation_error = parse_sale_detail(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        client.rpc(
+            "hope_add_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_product_code": values["product_code"],
+                "p_quantity": values["quantity"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line added."), 201
+
+
+@app.patch("/api/sales/<trans_no>/details/<product_code>")
+def api_edit_sale_detail(trans_no, product_code):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    values, validation_error = parse_sale_detail(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        client.rpc(
+            "hope_edit_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_old_product_code": product_code,
+                "p_product_code": values["product_code"],
+                "p_quantity": values["quantity"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line updated.")
+
+
+@app.delete("/api/sales/<trans_no>/details/<product_code>")
+def api_delete_sale_detail(trans_no, product_code):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        client.rpc(
+            "hope_delete_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_product_code": product_code,
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line deleted.")
+
+
+@app.get("/api/sales/<trans_no>/payments")
+def api_sale_payments(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc(
+            "hope_sales_payments_data",
+            {"p_transno": trans_no},
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_payment_error_response(error)
+    if not isinstance(response.data, Mapping):
+        app.logger.error("Sales payment data RPC returned an invalid response")
+        return jsonify(error="Sale payments could not be loaded."), 502
+    return jsonify(response.data)
+
+
+@app.post("/api/sales/<trans_no>/payments")
+def api_add_sale_payment(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "create")
+    if error:
+        return error
+    values, validation_error = parse_sale_payment(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_create_sale_payment",
+            {
+                "p_transno": trans_no,
+                "p_paydate": values["payment_date"],
+                "p_amount": values["amount"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_payment_error_response(error)
+    data = response.data
+    receipt_no = (
+        data[0].get("orno")
+        if isinstance(data, list) and data and isinstance(data[0], Mapping)
+        else data.get("orno")
+        if isinstance(data, Mapping)
+        else data
+        if isinstance(data, str)
+        else None
+    )
+    if not isinstance(receipt_no, str):
+        app.logger.error("Sale payment RPC returned no receipt number")
+        return jsonify(error="Payment could not be recorded."), 502
+    return jsonify(
+        message=f"Payment recorded as {receipt_no}.",
+        receiptNo=receipt_no,
+    ), 201
 
 
 @app.post("/api/records/<module_slug>")
@@ -1496,6 +3054,15 @@ def api_delete_record(module_slug, record_id):
             .execute()
         )
     except APIError as error:
+        if module_slug == "employees" and error.code in {"P0001", "23514"}:
+            if "linked user profile" in str(error).lower():
+                return jsonify(
+                    error="This employee cannot be deleted while a user profile is linked. Unlink the profile first."
+                ), 409
+            if "cannot delete employee" in str(error).lower():
+                return jsonify(
+                    error="This employee cannot be deleted while active Job History or Sales records are linked."
+                ), 409
         if (
             module_slug == "customers"
             and error.code in {"P0001", "23514"}
@@ -2272,36 +3839,49 @@ def api_login():
         response = client.auth.sign_in_with_password(
             {"email": email, "password": password}
         )
-        if response.session is None or response.user is None:
-            return jsonify(error="Login could not be completed."), 401
+    except AuthRetryableError:
+        app.logger.exception("Supabase login service is temporarily unavailable")
+        return jsonify(error="Login service is unavailable. Please try again later."), 502
+    except AuthError:
+        return jsonify(error="Invalid email or password."), 401
+    except httpx.HTTPError:
+        app.logger.exception("Supabase sign-in request failed")
+        return jsonify(error="Login service is unavailable. Please try again later."), 502
 
-        client.auth.set_session(
-            response.session.access_token, response.session.refresh_token
-        )
-        profile = get_current_profile(client)
+    if response.session is None or response.user is None:
+        return jsonify(error="Login could not be completed."), 401
+
+    try:
+        client.postgrest.auth(response.session.access_token)
+        profile = get_current_profile(client, response.user.id)
         if profile is None:
-            client.auth.sign_out()
             return jsonify(error="Your account profile is unavailable."), 403
         if (
             profile["status"] in {"blocked", "rejected"}
             or profile.get("blocked") is True
             or profile.get("is_deleted") is True
         ):
-            client.auth.sign_out()
             return jsonify(error="This account is blocked. Contact an administrator."), 403
         if profile["status"] == "pending":
-            client.auth.sign_out()
             return jsonify(error="Your account is pending administrator approval."), 403
     except AuthRetryableError:
         app.logger.exception("Supabase login service is temporarily unavailable")
         return jsonify(error="Login service is unavailable. Please try again later."), 502
+    except APIError:
+        app.logger.exception("Login profile could not be loaded")
+        return jsonify(error="Account profile could not be loaded. Please try again later."), 503
     except (AuthError, httpx.HTTPError):
-        return jsonify(error="Invalid email or password."), 401
+        app.logger.exception("Authenticated login session could not be established")
+        return jsonify(
+            error="Authentication succeeded, but your login session could not be established. Please try again later."
+        ), 502
 
     session.clear()
     session["access_token"] = response.session.access_token
     session["refresh_token"] = response.session.refresh_token
+    session["access_token_expires_at"] = response.session.expires_at
     session["user_id"] = response.user.id
+    session["must_set_password"] = must_set_password(response.user)
     require_password = must_set_password(response.user)
     return jsonify(
         message="Login successful.",
@@ -2337,7 +3917,7 @@ def set_password():
     if not profile_is_active(profile):
         session.clear()
         return redirect(url_for("login"))
-    if not must_set_password(client.auth.get_user().user):
+    if session.get("must_set_password") is not True:
         return redirect(url_for("index"))
     return render_template("set_password.html")
 
@@ -2365,12 +3945,13 @@ def api_set_password():
         return jsonify(error="Passwords do not match."), 400
 
     try:
+        client.auth.set_session(
+            session["access_token"],
+            session["refresh_token"],
+        )
         client.auth.update_user(
             {"password": password, "data": {"must_set_password": False}}
         )
-        user = client.auth.get_user().user
-        if user is None:
-            return jsonify(error="Your session is no longer valid."), 401
     except AuthRetryableError:
         app.logger.exception("Supabase password update service is temporarily unavailable")
         return jsonify(error="Password service is unavailable. Please try again later."), 502
@@ -2378,6 +3959,7 @@ def api_set_password():
         app.logger.exception("Supabase password update failed")
         return jsonify(error="Password could not be updated. Please try again."), 502
 
+    session["must_set_password"] = False
     return jsonify(message="Password updated.", redirect=url_for("index"))
 
 

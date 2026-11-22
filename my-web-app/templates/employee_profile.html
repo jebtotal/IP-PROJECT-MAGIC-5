@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% set page_title = "Employee Profile" %}
+{% block title %}Employee Profile | PentadERP{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> HUMAN RESOURCES MODULE</span>
+      <h2>{{ employee.firstname or "" }} {{ employee.lastname or "" }}</h2>
+      <p>Employee {{ employee.empno }}</p>
+    </div>
+    <div class="table-actions">
+      <a class="btn btn-secondary" href="/human-resources/employees">Back to Employees</a>
+      {% if can_view_history and not employee.is_deleted %}
+        <a class="btn btn-secondary" href="/human-resources/employees/{{ employee.empno }}/job-history">Manage Job History</a>
+      {% endif %}
+    </div>
+  </section>
+
+  <nav class="record-tabs" aria-label="Human Resources lists">
+    <a class="record-tab" href="/human-resources">Departments</a>
+    <a class="record-tab" href="/human-resources/jobs">Jobs</a>
+    <a class="record-tab is-active" href="/human-resources/employees" aria-current="page">Employees</a>
+  </nav>
+
+  <section class="management-panel glass-panel employee-profile-panel" aria-label="Employee details">
+    <div class="employee-profile-heading">
+      <div>
+        <span class="eyebrow">EMPLOYEE DETAILS</span>
+        <h3>{{ employee.firstname or "" }} {{ employee.lastname or "" }}</h3>
+        <p>{{ employee.empno }}</p>
+      </div>
+      <span class="employee-status{% if employee.is_deleted %} is-inactive{% elif not is_current %} is-separated{% endif %}">
+        {% if employee.is_deleted %}Inactive{% elif is_current %}Current{% else %}Separated{% endif %}
+      </span>
+    </div>
+    <dl class="employee-profile-details">
+      <div><dt>Gender</dt><dd>{% if employee.gender == "F" %}Female{% elif employee.gender == "M" %}Male{% else %}—{% endif %}</dd></div>
+      <div><dt>Birth Date</dt><dd>{{ employee.birthdate or "—" }}</dd></div>
+      <div><dt>Hire Date</dt><dd>{{ employee.hiredate or "—" }}</dd></div>
+      <div><dt>Separation Date</dt><dd>{{ employee.sepdate or "—" }}</dd></div>
+      {% if is_admin %}<div><dt>Record Status</dt><dd>{{ "Inactive" if employee.is_deleted else "Active" }}</dd></div>{% endif %}
+    </dl>
+  </section>
+
+  {% if can_view_history %}
+    <section class="management-panel glass-panel employee-timeline-panel" aria-label="Employee job timeline">
+      <div class="employee-timeline-heading">
+        <div>
+          <span class="eyebrow">CAREER HISTORY</span>
+          <h3>Job Timeline</h3>
+        </div>
+        {% if not employee.is_deleted %}
+          <a class="btn btn-secondary" href="/human-resources/employees/{{ employee.empno }}/job-history">View all job history</a>
+        {% endif %}
+      </div>
+      {% if employee.is_deleted %}
+        <p class="table-message">Restore this employee to view the job timeline.</p>
+      {% elif timeline %}
+        <ol class="employee-timeline">
+          {% for item in timeline %}
+            <li class="employee-timeline-item{% if item.status == 'Current' %} is-current{% endif %}">
+              <span class="employee-timeline-marker" aria-hidden="true"></span>
+              <article class="employee-timeline-card">
+                <div class="employee-timeline-card-heading">
+                  <div>
+                    <h4>{{ item.jobTitle or item.jobCode or "Job not specified" }}</h4>
+                    <p>{{ item.deptCode }}{% if item.departmentName %} · {{ item.departmentName }}{% endif %}</p>
+                  </div>
+                  <span class="employee-status{% if item.status != 'Current' %} is-muted{% endif %}">{{ item.status }}</span>
+                </div>
+                <dl class="employee-timeline-meta">
+                  <div><dt>Effective</dt><dd>{{ item.effDate or "—" }}</dd></div>
+                  <div><dt>Salary</dt><dd>{{ item.salary or "—" }}</dd></div>
+                </dl>
+              </article>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="table-message">No job history has been recorded for this employee.</p>
+      {% endif %}
+    </section>
+  {% endif %}
+{% endblock %}

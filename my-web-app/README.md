@@ -126,6 +126,13 @@ The HOPE schema is split into timestamp-ordered migrations:
   Run `supabase/tests/s1_dba_06_audit_user.sql` in the SQL Editor after the
   migrations to test add/edit/soft-delete attribution and the fallback; it
   rolls back test rows.
+- `20261122001500_s1_dba_10_hope_audit_trigger_compat.sql` is a forward-only
+  repair for installations where legacy `*_aiu_audit` triggers from the source
+  HOPE audit migration remain attached to operational tables. Those triggers
+  write columns absent from the application's `audit_log` and cause record
+  inserts to fail. Apply it after `20261109000000_hope_app_access.sql`; it
+  replaces only the ten operational-table audit triggers and does not alter
+  audit-log rows or table columns.
 - `20261110000000_s1_dba_07_price_history_rights.sql` adds the normalized
   price-history mutation rights and keeps the catalogue and HOPE access helper
   consistent with the app's effective-date price-history operations.
@@ -340,6 +347,58 @@ The HOPE schema is split into timestamp-ordered migrations:
 - `20261122000800_s3_dba_07_department_view_access.sql` aligns the department
   SELECT policy with the existing Human Resources module-view right; department
   add/edit/delete continue to use their resource-specific rights.
+- `20261122000900_s4_bld_01_sales_header.sql` adds the Sales list's protected
+  customer/salesperson option RPC and a permission-checked sale-creation RPC.
+  New transaction numbers use an atomic sequence initialized from existing
+  `TR` plus six-digit identifiers; the format is retained and concurrent
+  requests cannot allocate the same number. Only active customers and eligible
+  employees are offered, and the database rechecks those references when it
+  creates the sale. Apply this migration after
+  `20261109000000_hope_app_access.sql`. Sales View is required to load choices
+  and list transactions; Sales Add is additionally required to create a sale.
+- `20261122001000_s4_bld_02_sales_details.sql` adds the protected Sales Details
+  read and line-item add/edit/soft-delete operations. Mutations require the
+  matching Sales Details Add/Edit/Delete right and an active sale/product.
+  Products without a non-deleted price effective on the sale date are excluded
+  from selection. The displayed unit price and line total use
+  `price_as_of(product, salesdate)`, matching the Sales balance views; the
+  existing `salesdetail` schema does not store a separate price snapshot.
+  Apply after the Sales header migration, the Sales rights catalogue seed, and
+  `20261109000000_hope_app_access.sql` and
+  `20261122000500_s2_dba_02_price_as_of.sql`.
+- `20261122001100_s4_bld_03_sales_payments.sql` adds the transaction payment
+  history and payment-recording RPCs. It requires the Sales balance views and
+  HOPE app-access policies. Receipt numbers are assigned atomically in the
+  existing `OR` plus six-digit format. Recording a payment requires Sales View
+  and Sales Add; the existing balance calculation supports partial and excess
+  payments. Payment amount and date are validated, and payment history shows
+  the updated total, paid amount, balance, and receipt list. Apply after
+  `20261122000800_s4_dba_01_02_sales_balance_views.sql`,
+  `20261122000900_s4_bld_01_sales_header.sql`, and
+  `20261122001000_s4_bld_02_sales_details.sql`.
+- `20261122001200_s4_bld_04_reports.sql` installs the individual report rights
+  and permission-checked data function. It provides Product Master List,
+  Active Employees, All Employees, Employee Job History, Top Customers,
+  Top Products, and Top Sales. Ranked reports require inclusive start/end dates
+  and Top N from 1 to 100. Employee Job History requires an employee selection
+  and includes salary only for users with that report's right. Apply after the
+  S1 report-rights catalogue seed, employee-current and price-as-of migrations,
+  and `20261122000800_s4_dba_01_02_sales_balance_views.sql`.
+  Each report right is assigned independently in User Management, in addition
+  to Reports View. Print / Save as PDF uses the browser print dialog.
+- `20261122001300_s4_bld_05_sales_balances_soft_delete.sql` exposes the
+  transaction and customer payment balances to users with Sales View and adds
+  permission-checked sale soft delete/restore. Sales Delete is required to
+  move a sale inactive; restore additionally requires an administrator role.
+  The existing stamp trigger records delete/restore actions. Sale lines and
+  payments remain attached while a sale is inactive, so restoring it reactivates
+  the transaction without discarding history. Apply after the Sales balance
+  views and the Sales header migration.
+- `20261122001400_s1_bld_09_audit_log_viewer.sql` installs a read-only,
+  paginated audit-log RPC. It supports both the source HOPE audit schema and
+  the app's existing audit schema, and checks the caller's active Superadmin
+  profile inside the database function. Apply after
+  `20261109000000_hope_app_access.sql`.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -383,16 +442,17 @@ by Git.
 
 ## HR query indexes
 
-No additional HR index is proposed in S3-DBA-06. The HR module currently has
-Department and Job lists but no employee list. Both lists use the shared
-record-list API, which fetches rows before applying search in Python, so name
-indexes would not accelerate that search. `get_current_profile` and
+No additional HR index is proposed in S3-DBA-06. The HR module has Department,
+Job, and Employee lists. They use the shared record-list API, which
+fetches rows before applying search and filters in Python, so name indexes
+would not accelerate that search. `get_current_profile` and
 user-management record lookups filter `profiles.id`, whose primary key is
 already indexed; the admin user list filters by role and orders by
 `created_at`. Employee, department, and job codes are primary keys; S3-DBA-02
 already created the partial unique `jobhistory(empno, effdate) WHERE NOT
 is_deleted` index used by the current employee view. Do not add duplicate or
-speculative indexes. Measure future HR queries with
+speculative indexes. The same index enforces one active Job History record
+per employee and effective date. Measure future HR queries with
 `EXPLAIN (ANALYZE, BUFFERS)` before and after any candidate index.
 
 ## PostgreSQL backup and restore
@@ -491,13 +551,28 @@ separate price-history migration adds three price mutation rights, and the
 S2-BLD-01 migration adds the eight guide rights found missing in the checked-in
 catalogue.
 
-Departments and Jobs are available at `/human-resources` and
-`/human-resources/jobs`; Customers and Products are at `/customers` and
-`/products`. The HR lists share a record list that provides search,
-administrator active/inactive/all filters, permission-checked create/edit/
-soft-delete operations, and administrator-only restore. Department and Job
-mutations use their resource-specific HR rights; deletion is refused while
-active job-history records are linked. Customer deletion is refused while
+Departments, Jobs, and Employees are available at `/human-resources`,
+`/human-resources/jobs`, and `/human-resources/employees`; Customers and
+Products are at `/customers` and `/products`. The HR lists share a record list
+that provides search and administrator active/inactive/all filters.
+Employees can additionally be filtered by gender and employment status;
+Current includes employees without a separation date or with a separation
+date on/after today's Asia/Manila date. Employee creation and editing use the
+employee Add/Edit rights; employee numbers cannot be changed after creation.
+Employee separation dates remain editable. Employee deletion uses the
+employee Delete right and is soft-delete only; linked profiles must first be
+unlinked, and active Job History/Sales records prevent deletion. Only
+administrators can restore inactive Employees.
+Employee profiles are available from the employee list and show personal
+details with a chronological Job Timeline when the user has Job History View.
+Employees with Job History View access have a per-employee Job History page
+for effective-dated job/department promotions or transfers and salary. Job
+History Add/Edit/Delete rights control those operations, which soft-delete
+history records and reject duplicate active effective dates.
+Department and Job lists provide permission-checked create/edit/soft-delete
+operations and administrator-only restore. Department and Job mutations use
+their resource-specific HR rights; deletion is refused while active
+job-history records are linked. Customer deletion is refused while
 `sales_active` contains a linked sale. Admin/Superadmin rows show
 Active/Inactive and a stamp; Users see active rows only. The Department form
 maps to `deptcode` and `deptname`; the Job form maps to `jobcode` and
@@ -515,7 +590,7 @@ access to Price History; separate Price History Add/Edit/Delete rights control
 mutations. Assign those rights through User Management; the migration does not
 assign them automatically.
 CRUD requests use the authenticated Supabase client so RLS remains in effect.
-Department viewing uses the Human Resources View right. Apply
+Employee, Department, and Job viewing use the Human Resources View right. Apply
 `20261122000800_s3_dba_07_department_view_access.sql` after
 `20261109000000_hope_app_access.sql` so the Department and Job RLS policies
 match that view permission. If the active view, table access, or policies are

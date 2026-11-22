@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% set page_title = "Sales" %}
+{% block title %}Sales | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.salesListConfig = {
+      isAdmin: {{ "true" if is_admin else "false" }},
+      today: {{ today|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='sales-list.js', v='9') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> SALES MODULE</span>
+      <h2>Sales</h2>
+      <p>Search sales transactions and create a new sale.</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel record-panel" aria-label="Sales transactions">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search sales</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="sales-search" type="search" placeholder="Search transaction, customer, salesperson, or date..." autocomplete="off">
+      </label>
+      <button id="sale-add" type="button" class="btn btn-primary sales-add-button" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> New Sale
+      </button>
+    </div>
+    <p id="sales-options-message" class="table-message" role="status" aria-live="polite"></p>
+    <p id="sales-result-count" class="table-message" role="status" aria-live="polite"></p>
+
+    {% if is_admin %}
+      <div id="sales-tabs" class="record-tabs" role="tablist" aria-label="Sales status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
+    {% endif %}
+
+    <p id="sales-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table record-table sales-table">
+        <thead>
+          <tr>
+            <th scope="col">Transaction No</th>
+            <th scope="col">Sale Date</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Salesperson</th>
+            <th scope="col">Total</th>
+            <th scope="col">Paid</th>
+            <th scope="col">Balance</th>
+            <th scope="col">Payment Status</th>
+            <th scope="col">Details / Payments</th>
+            {% if is_admin %}
+              <th scope="col">Status</th>
+              <th scope="col">Stamp</th>
+            {% endif %}
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sales-body"></tbody>
+      </table>
+    </div>
+
+    <section class="sales-customer-balances" aria-labelledby="sales-customer-balances-heading">
+      <div>
+        <span class="eyebrow">CUSTOMER ACCOUNT SUMMARY</span>
+        <h3 id="sales-customer-balances-heading">Customer Balances</h3>
+      </div>
+      <p id="sales-customer-balances-message" class="table-message" role="status" aria-live="polite"></p>
+      <div class="table-wrap">
+        <table class="management-table record-table sales-customer-balance-table">
+          <thead>
+            <tr>
+              <th scope="col">Customer</th>
+              <th scope="col">Sales Total</th>
+              <th scope="col">Paid</th>
+              <th scope="col">Balance</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody id="sales-customer-balances-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
+  <dialog id="sale-dialog" class="app-dialog" aria-labelledby="sale-dialog-title">
+    <form id="sale-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">SALES DETAILS</span>
+          <h2 id="sale-dialog-title" class="dialog-title">New Sale</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="sale-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p class="table-message">The transaction number is assigned automatically when the sale is saved.</p>
+      <div class="form-grid">
+        <label class="record-field">
+          Sale Date
+          <input id="sale-date" name="salesDate" type="date" required>
+        </label>
+        <label class="record-field">
+          Customer
+          <select id="sale-customer" name="customerNo" required>
+            <option value="">Loading customers...</option>
+          </select>
+        </label>
+        <label class="record-field">
+          Salesperson
+          <select id="sale-salesperson" name="employeeNo" required>
+            <option value="">Loading salespeople...</option>
+          </select>
+        </label>
+      </div>
+      <p id="sale-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="sale-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="sale-save" class="btn btn-primary">Create Sale</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="sale-details-dialog" class="app-dialog" aria-labelledby="sale-details-title">
+    <div class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">SALE DETAILS</span>
+          <h2 id="sale-details-title" class="dialog-title">Sale line items</h2>
+          <p id="sale-details-date" class="dialog-description"></p>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="sale-details-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="sale-details-message" class="table-message" role="status" aria-live="polite"></p>
+      <button type="button" id="sale-detail-add" class="btn btn-primary" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Line Item
+      </button>
+      <div id="sale-detail-form-wrap" hidden>
+        <form id="sale-detail-form" class="form-grid">
+          <label class="record-field">
+            Product
+            <select id="sale-detail-product" name="productCode" required></select>
+          </label>
+          <label class="record-field">
+            Quantity
+            <input id="sale-detail-quantity" name="quantity" type="number" min="0.01" step="0.01" required>
+          </label>
+          <label class="record-field">
+            Unit Price (as of sale date)
+            <output id="sale-detail-unit-price" class="record-field-output">—</output>
+          </label>
+          <div class="dialog-actions">
+            <button type="button" id="sale-detail-cancel" class="btn btn-secondary" hidden>Cancel Edit</button>
+            <button type="submit" id="sale-detail-save" class="btn btn-primary">Add Line</button>
+          </div>
+        </form>
+        <p id="sale-detail-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      </div>
+      <div class="table-wrap">
+        <table class="management-table record-table">
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Unit Price</th>
+              <th scope="col">Line Total</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sale-details-body"></tbody>
+        </table>
+      </div>
+      <section class="sale-payment-section" aria-labelledby="sale-payments-heading">
+        <div class="sale-payment-heading">
+          <div>
+            <span class="eyebrow">PAYMENT TRACKING</span>
+            <h3 id="sale-payments-heading">Transaction payments</h3>
+          </div>
+          <button type="button" id="sale-payment-add" class="btn btn-primary" hidden>
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Record Payment
+          </button>
+        </div>
+        <dl class="sale-payment-summary">
+          <div><dt>Total</dt><dd id="sale-payment-total">—</dd></div>
+          <div><dt>Paid</dt><dd id="sale-payment-paid">—</dd></div>
+          <div><dt>Balance</dt><dd id="sale-payment-balance">—</dd></div>
+          <div><dt>Status</dt><dd id="sale-payment-status">—</dd></div>
+        </dl>
+        <p id="sale-payment-message" class="table-message" role="status" aria-live="polite"></p>
+        <div id="sale-payment-form-wrap" hidden>
+          <form id="sale-payment-form" class="form-grid">
+            <label class="record-field">
+              Payment Date
+              <input id="sale-payment-date" name="paymentDate" type="date" required>
+            </label>
+            <label class="record-field">
+              Amount
+              <input id="sale-payment-amount" name="amount" type="number" min="0.01" step="0.01" required>
+            </label>
+            <div class="dialog-actions">
+              <button type="button" id="sale-payment-cancel" class="btn btn-secondary">Cancel</button>
+              <button type="submit" id="sale-payment-save" class="btn btn-primary">Save Payment</button>
+            </div>
+          </form>
+          <p id="sale-payment-form-error" class="form-message" role="alert" aria-live="polite"></p>
+          <p class="dialog-description">Partial and excess payments are recorded as entered.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="management-table record-table">
+            <thead>
+              <tr>
+                <th scope="col">Receipt No</th>
+                <th scope="col">Payment Date</th>
+                <th scope="col">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="sale-payments-body"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </dialog>
+{% endblock %}
