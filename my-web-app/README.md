@@ -138,6 +138,18 @@ The HOPE schema is split into timestamp-ordered migrations:
   `supabase/tests/s3_dba_01_employee_current.sql` tests transfers, a future
   promotion, employees without history, and soft-deleted employees; it rolls
   back all test rows.
+- `20261122000100_s3_dba_02_jobhistory_unique_effdate.sql` prevents active
+  job-history rows from sharing an employee/effective-date pair, while allowing
+  a soft-deleted row to remain archived. It reports existing duplicate pairs
+  and preserves all rows; if active duplicates exist, it installs a trigger
+  guard and defers the partial unique index until the duplicates have been
+  reviewed and resolved. The effective-date and nonnegative-salary checks are
+  added `NOT VALID` so pre-existing data cannot block deployment, while new
+  writes are checked. After resolving any reported duplicates, rerun the
+  migration to create the index.
+  `supabase/tests/s3_dba_02_jobhistory_unique_effdate.sql` tests valid inserts,
+  duplicate rejection, and rejecting a conflicting soft-delete restore; it
+  rolls back all test rows.
 
 
 Confirm the target project and review existing HOPE relations before applying
