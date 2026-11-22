@@ -46,3 +46,4 @@ Deliver the Customer and Product workflows, including effective-dated price hist
 - [Team working agreement and Definition of Done](TEAM_WORKING_AGREEMENT_DEFINITION_OF_DONE_ROLE_GUIDE.md)
 - [Sprint 1 review and retrospective](SPRINT_1_REVIEW_AND_RETROSPECTIVE_REPORT.md)
 - [Sprint 1 retrospective action follow-up](SPRINT_2_RETRO_ACTION_FOLLOW_UP.md)
+- [Sprint 2 mid-sprint check and impediment log](MID_SPRINT_2_CHECK_AND_IMPEDIMENT_LOG.md)
