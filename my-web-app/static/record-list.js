@@ -3,6 +3,15 @@ const searchInput = document.querySelector("#record-search");
 const recordTableHead = document.querySelector("#record-head");
 const recordTableBody = document.querySelector("#record-body");
 const recordMessage = document.querySelector("#records-message");
+const recordResultCount = document.querySelector("#record-result-count") || (() => {
+  const count = document.createElement("p");
+  count.id = "record-result-count";
+  count.className = "table-message";
+  count.setAttribute("role", "status");
+  count.setAttribute("aria-live", "polite");
+  document.querySelector(".record-toolbar").insertAdjacentElement("afterend", count);
+  return count;
+})();
 const recordAddButton = document.querySelector("#record-add");
 const recordDialog = document.querySelector("#record-dialog");
 const recordForm = document.querySelector("#record-form");
@@ -233,8 +242,16 @@ function filterRecords() {
   );
 }
 
+function updateResultCount(filteredCount) {
+  const search = searchInput.value.trim();
+  recordResultCount.textContent = search
+    ? `Showing ${filteredCount} of ${records.length} results.`
+    : `${records.length} results.`;
+}
+
 async function loadRecords() {
   recordMessage.textContent = "";
+  recordResultCount.textContent = "";
   const requestedFilterKey = recordFilterKey();
   try {
     const result = await request(`/api/records/${config.module}?${requestedFilterKey}`);
@@ -243,7 +260,9 @@ async function loadRecords() {
     recordAddButton.hidden = !currentActions.create;
     records = result.records;
     loadedFilterKey = requestedFilterKey;
-    renderRecords(filterRecords());
+    const filteredRecords = filterRecords();
+    renderRecords(filteredRecords);
+    updateResultCount(filteredRecords.length);
     updateCounts(result.counts);
   } catch (error) {
     if (requestedFilterKey !== recordFilterKey()) return;
@@ -253,6 +272,7 @@ async function loadRecords() {
     recordTableBody.replaceChildren();
     records = [];
     loadedFilterKey = requestedFilterKey;
+    recordResultCount.textContent = "";
   }
 }
 
@@ -381,7 +401,9 @@ document.querySelectorAll('[data-dialog-close="record-dialog"]').forEach((button
 recordForm.addEventListener("submit", saveRecord);
 searchInput.addEventListener("input", () => {
   if (loadedFilterKey === recordFilterKey()) {
-    renderRecords(filterRecords());
+    const filteredRecords = filterRecords();
+    renderRecords(filteredRecords);
+    updateResultCount(filteredRecords.length);
   }
 });
 recordFilters?.addEventListener("change", loadRecords);

@@ -2,6 +2,15 @@ const config = window.salesListConfig;
 const searchInput = document.querySelector("#sales-search");
 const salesBody = document.querySelector("#sales-body");
 const salesMessage = document.querySelector("#sales-message");
+const salesResultCount = document.querySelector("#sales-result-count") || (() => {
+  const count = document.createElement("p");
+  count.id = "sales-result-count";
+  count.className = "table-message";
+  count.setAttribute("role", "status");
+  count.setAttribute("aria-live", "polite");
+  document.querySelector(".record-toolbar").insertAdjacentElement("afterend", count);
+  return count;
+})();
 const customerBalancesBody = document.querySelector("#sales-customer-balances-body");
 const customerBalancesMessage = document.querySelector("#sales-customer-balances-message");
 const salesOptionsMessage = document.querySelector("#sales-options-message");
@@ -237,8 +246,13 @@ function filterSalesRecords() {
 }
 
 function renderCurrentSales() {
-  renderSales(filterSalesRecords(), saleDetailActions);
+  const filteredRecords = filterSalesRecords();
+  renderSales(filteredRecords, saleDetailActions);
   renderCustomerBalances(customerBalanceRecords);
+  const search = searchInput.value.trim();
+  salesResultCount.textContent = search
+    ? `Showing ${filteredRecords.length} of ${salesRecords.length} sales transactions.`
+    : `${salesRecords.length} sales transactions.`;
 }
 
 function updateCounts(counts) {
@@ -251,6 +265,7 @@ function updateCounts(counts) {
 
 async function loadSales() {
   salesMessage.textContent = "";
+  salesResultCount.textContent = "";
   const params = new URLSearchParams({
     status: config.isAdmin ? currentStatus : "active",
   });
@@ -282,6 +297,7 @@ async function loadSales() {
     salesRecords = [];
     customerBalanceRecords = [];
     loadedStatus = requestedStatus;
+    salesResultCount.textContent = "";
     if (!saleOptionsLoaded) void loadSaleOptions();
   }
 }
