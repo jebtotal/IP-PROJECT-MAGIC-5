@@ -231,6 +231,30 @@ The HOPE schema is split into timestamp-ordered migrations:
   ignoring a future price, using it when its date arrives, the current-price
   view, and duplicate-date rejection; fixtures are rolled back.
 
+- `20261122000600_s2_dba_03_validation_constraints.sql` enforces
+  `customer.payterm IN ('COD', '30D', '45D')` using `pay_ck` and
+  `product.unit IN ('pc', 'ea', 'mtr', 'pkg', 'ltr')` using `unit_ck`.
+  The source schema and app already use these sets. The sample-data migration
+  has 82 customer rows using `30D` (28), `45D` (30), and `COD` (24), and 57
+  product rows using `ea` (37) and `pc` (20); `mtr`, `pkg`, and `ltr` are
+  available in the schema/app but not present in the sample rows. The existing
+  nullable behavior is preserved.
+  The migration briefly locks both tables against concurrent writes, then
+  scans every current row, including soft-deleted rows, before adding or
+  validating a constraint. If it finds an unapproved non-NULL value, it raises
+  an exception listing each affected primary key and value, and leaves the
+  constraints unapplied so the records can be reviewed. It stops
+  rather than silently duplicating a differently named check on the column.
+  Idempotently keeps or validates the existing `pay_ck`/`unit_ck` checks,
+  adding only a missing named check when no conflicting check exists.
+  The supplied guide is not present in the repository; the Customer wireframe
+  notes that guide wording “Net 30” differs from the built `30D` option. The
+  allowed labels below follow the existing schema and app options confirmed
+  for this task. No live-copy values have been checked in this environment.
+  `supabase/tests/s2_dba_03_validation_constraints.sql` inserts every allowed
+  value and verifies two invalid examples per column (`NET`, `60D`; `box`,
+  `kg`) are rejected by the expected constraints, then rolls back.
+
 - `supabase/seeds/s3_dba_05_hr_demo_data.sql` adds the explicitly synthetic
   HR-only demo departments, jobs, employees, and history rows. It includes a
   promotion, transfer, future-dated job change, separated employee, soft-deleted
