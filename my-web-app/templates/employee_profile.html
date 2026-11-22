@@ -43,43 +43,43 @@
     </dl>
   </section>
 
-  <section class="management-panel glass-panel employee-timeline-panel" aria-label="Employee job timeline">
-    <div class="employee-timeline-heading">
-      <div>
-        <span class="eyebrow">CAREER HISTORY</span>
-        <h3>Job Timeline</h3>
+  {% if can_view_history %}
+    <section class="management-panel glass-panel employee-timeline-panel" aria-label="Employee job timeline">
+      <div class="employee-timeline-heading">
+        <div>
+          <span class="eyebrow">CAREER HISTORY</span>
+          <h3>Job Timeline</h3>
+        </div>
+        {% if not employee.is_deleted %}
+          <a class="btn btn-secondary" href="/human-resources/employees/{{ employee.empno }}/job-history">View all job history</a>
+        {% endif %}
       </div>
-      {% if can_view_history and not employee.is_deleted %}
-        <a class="btn btn-secondary" href="/human-resources/employees/{{ employee.empno }}/job-history">View all job history</a>
-      {% endif %}
-    </div>
-    {% if not can_view_history %}
-      <p class="table-message">Job History View permission is required to see this timeline.</p>
-    {% elif employee.is_deleted %}
-      <p class="table-message">Restore this employee to view the job timeline.</p>
-    {% elif timeline %}
-      <ol class="employee-timeline">
-        {% for item in timeline %}
-          <li class="employee-timeline-item{% if item.status == 'Current' %} is-current{% endif %}">
-            <span class="employee-timeline-marker" aria-hidden="true"></span>
-            <article class="employee-timeline-card">
-              <div class="employee-timeline-card-heading">
-                <div>
-                  <h4>{{ item.jobTitle or item.jobCode or "Job not specified" }}</h4>
-                  <p>{{ item.deptCode }}{% if item.departmentName %} · {{ item.departmentName }}{% endif %}</p>
+      {% if employee.is_deleted %}
+        <p class="table-message">Restore this employee to view the job timeline.</p>
+      {% elif timeline %}
+        <ol class="employee-timeline">
+          {% for item in timeline %}
+            <li class="employee-timeline-item{% if item.status == 'Current' %} is-current{% endif %}">
+              <span class="employee-timeline-marker" aria-hidden="true"></span>
+              <article class="employee-timeline-card">
+                <div class="employee-timeline-card-heading">
+                  <div>
+                    <h4>{{ item.jobTitle or item.jobCode or "Job not specified" }}</h4>
+                    <p>{{ item.deptCode }}{% if item.departmentName %} · {{ item.departmentName }}{% endif %}</p>
+                  </div>
+                  <span class="employee-status{% if item.status != 'Current' %} is-muted{% endif %}">{{ item.status }}</span>
                 </div>
-                <span class="employee-status{% if item.status != 'Current' %} is-muted{% endif %}">{{ item.status }}</span>
-              </div>
-              <dl class="employee-timeline-meta">
-                <div><dt>Effective</dt><dd>{{ item.effDate or "—" }}</dd></div>
-                <div><dt>Salary</dt><dd>{{ item.salary or "—" }}</dd></div>
-              </dl>
-            </article>
-          </li>
-        {% endfor %}
-      </ol>
-    {% else %}
-      <p class="table-message">No job history has been recorded for this employee.</p>
-    {% endif %}
-  </section>
+                <dl class="employee-timeline-meta">
+                  <div><dt>Effective</dt><dd>{{ item.effDate or "—" }}</dd></div>
+                  <div><dt>Salary</dt><dd>{{ item.salary or "—" }}</dd></div>
+                </dl>
+              </article>
+            </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="table-message">No job history has been recorded for this employee.</p>
+      {% endif %}
+    </section>
+  {% endif %}
 {% endblock %}
