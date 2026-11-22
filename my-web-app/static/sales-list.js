@@ -47,7 +47,11 @@ let currentSaleDetails = null;
 let currentSalePayments = null;
 let currentTransactionNo = null;
 let editingProductCode = null;
-let searchTimer;
+let salesRecords = [];
+let customerBalanceRecords = [];
+let saleDetailActions = null;
+let loadedStatus = null;
+let saleOptionsLoaded = false;
 
 async function request(url, options = {}) {
   const headers = {
@@ -217,6 +221,26 @@ function renderCustomerBalances(records) {
       : "No active customers were found.";
 }
 
+function filterSalesRecords() {
+  const search = searchInput.value.trim().toLocaleLowerCase();
+  if (!search) return salesRecords;
+  return salesRecords.filter((record) =>
+    [
+      record.transNo,
+      record.salesDate,
+      record.customerName,
+      record.salespersonName,
+      record.custNo,
+      record.empNo,
+    ].some((value) => String(value || "").toLocaleLowerCase().includes(search))
+  );
+}
+
+function renderCurrentSales() {
+  renderSales(filterSalesRecords(), saleDetailActions);
+  renderCustomerBalances(customerBalanceRecords);
+}
+
 function updateCounts(counts) {
   if (!config.isAdmin || !counts) return;
   for (const status of ["active", "inactive", "all"]) {
@@ -229,22 +253,36 @@ async function loadSales() {
   salesMessage.textContent = "";
   const params = new URLSearchParams({
     status: config.isAdmin ? currentStatus : "active",
-    search: searchInput.value.trim(),
   });
+  const requestedStatus = currentStatus;
   try {
     const result = await request(`/api/sales?${params}`);
+    if (requestedStatus !== currentStatus) return;
     currentActions = result.actions;
     addButton.hidden = !currentActions.create;
     if (!result.actions.saleDetails) {
       salesMessage.textContent = "Apply the Sales Details migration to manage sale line items.";
     }
-    renderSales(result.records, result.actions.saleDetails);
-    renderCustomerBalances(result.customerBalances);
+    salesRecords = result.records;
+    customerBalanceRecords = result.customerBalances;
+    saleDetailActions = result.actions.saleDetails;
+    loadedStatus = requestedStatus;
+    fillOptions(saleCustomer, "Choose customer...", result.customers, "customerNo", "customerName");
+    fillOptions(saleSalesperson, "Choose salesperson...", result.salespeople, "employeeNo", "fullName");
+    salesOptionsMessage.textContent = "";
+    saleOptionsLoaded = true;
+    addButton.disabled = false;
+    renderCurrentSales();
     updateCounts(result.counts);
   } catch (error) {
+    if (requestedStatus !== currentStatus) return;
     salesMessage.textContent = error instanceof Error ? error.message : "Sales could not be loaded.";
     salesBody.replaceChildren();
     customerBalancesBody.replaceChildren();
+    salesRecords = [];
+    customerBalanceRecords = [];
+    loadedStatus = requestedStatus;
+    if (!saleOptionsLoaded) void loadSaleOptions();
   }
 }
 
@@ -266,6 +304,7 @@ async function loadSaleOptions() {
     fillOptions(saleCustomer, "Choose customer...", result.customers, "customerNo", "customerName");
     fillOptions(saleSalesperson, "Choose salesperson...", result.salespeople, "employeeNo", "fullName");
     salesOptionsMessage.textContent = "";
+    saleOptionsLoaded = true;
     addButton.disabled = false;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Sale choices could not be loaded.";
@@ -640,8 +679,9 @@ saleDetailsBody.addEventListener("click", async (event) => {
   }
 });
 searchInput.addEventListener("input", () => {
-  window.clearTimeout(searchTimer);
-  searchTimer = window.setTimeout(loadSales, 180);
+  if (loadedStatus === currentStatus) {
+    renderCurrentSales();
+  }
 });
 salesTabs?.addEventListener("click", (event) => {
   const tab = event.target.closest("[data-status]");
@@ -656,4 +696,3 @@ salesTabs?.addEventListener("click", (event) => {
 
 addButton.disabled = true;
 loadSales();
-loadSaleOptions();
