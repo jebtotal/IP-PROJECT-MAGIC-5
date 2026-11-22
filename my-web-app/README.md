@@ -189,6 +189,27 @@ The HOPE schema is split into timestamp-ordered migrations:
   blocks, ignored archived children, linked-profile blocks, and restore
   behavior. The test rolls back all fixtures and the temporary profile link.
 
+- `20261122000400_s2_dba_01_customer_product_active.sql` reasserts the
+  app-consumed `customer_active` and `product_active` views with
+  `security_invoker = true`; both expose the base-table columns but return
+  only rows where `is_deleted = false`. These names match `RECORD_MODULES` in
+  `app.py`. The migration emits the existing index catalog before and after
+  its view definitions so operators can compare their actual schema.
+  No new indexes are added: customer search (`custno`, `custname`, `address`,
+  `payterm`) and product search (`prodcode`, `description`, `unit`) happen in
+  Python after the app retrieves the active rows. The primary keys already
+  index `customer.custno` and `product.prodcode`; an index on `is_deleted` or
+  the name/description columns would not speed up these current queries.
+  Existing base-table foreign keys to Customer/Product are
+  `sales.custno`, `salesdetail.prodcode`, and `pricehist.prodcode`; the
+  migration does not add indexes to those related tables without measured
+  query evidence.
+  Run `supabase/tests/s2_dba_01_customer_product_active.sql` only against a
+  scratch/copy database as an approved admin/superadmin. It soft-deletes
+  temporary Customer and Product rows, verifies they disappear from the
+  active views while remaining in the base tables, lists the relevant
+  indexes, then rolls back the fixtures.
+
 - `supabase/seeds/s3_dba_05_hr_demo_data.sql` adds the explicitly synthetic
   HR-only demo departments, jobs, employees, and history rows. It includes a
   promotion, transfer, future-dated job change, separated employee, soft-deleted
