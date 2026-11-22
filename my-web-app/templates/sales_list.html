@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% set page_title = "Sales" %}
+{% block title %}Sales | PentadERP{% endblock %}
+{% block head_scripts %}
+  <script>
+    window.salesListConfig = {
+      isAdmin: {{ "true" if is_admin else "false" }},
+      today: {{ today|tojson }}
+    };
+  </script>
+  <script src="{{ url_for('static', filename='sales-list.js', v='1') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+  <section class="management-heading record-heading">
+    <div>
+      <span class="eyebrow"><span class="status-dot"></span> SALES MODULE</span>
+      <h2>Sales</h2>
+      <p>Search sales transactions and create a new sale.</p>
+    </div>
+  </section>
+
+  <section class="management-panel glass-panel record-panel" aria-label="Sales transactions">
+    <div class="record-toolbar">
+      <label class="record-search">
+        <span class="sr-only">Search sales</span>
+        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+        <input id="sales-search" type="search" placeholder="Search transaction, customer, salesperson, or date..." autocomplete="off">
+      </label>
+      <button id="sale-add" type="button" class="btn btn-primary sales-add-button" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> New Sale
+      </button>
+    </div>
+    <p id="sales-options-message" class="table-message" role="status" aria-live="polite"></p>
+
+    {% if is_admin %}
+      <div id="sales-tabs" class="record-tabs" role="tablist" aria-label="Sales status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
+    {% endif %}
+
+    <p id="sales-message" class="table-message" role="status" aria-live="polite"></p>
+    <div class="table-wrap">
+      <table class="management-table record-table sales-table">
+        <thead>
+          <tr>
+            <th scope="col">Transaction No</th>
+            <th scope="col">Sale Date</th>
+            <th scope="col">Customer</th>
+            <th scope="col">Salesperson</th>
+            {% if is_admin %}
+              <th scope="col">Status</th>
+              <th scope="col">Stamp</th>
+            {% endif %}
+          </tr>
+        </thead>
+        <tbody id="sales-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <dialog id="sale-dialog" class="app-dialog" aria-labelledby="sale-dialog-title">
+    <form id="sale-form" class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">SALES DETAILS</span>
+          <h2 id="sale-dialog-title" class="dialog-title">New Sale</h2>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="sale-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p class="table-message">The transaction number is assigned automatically when the sale is saved.</p>
+      <div class="form-grid">
+        <label class="record-field">
+          Sale Date
+          <input id="sale-date" name="salesDate" type="date" required>
+        </label>
+        <label class="record-field">
+          Customer
+          <select id="sale-customer" name="customerNo" required>
+            <option value="">Loading customers...</option>
+          </select>
+        </label>
+        <label class="record-field">
+          Salesperson
+          <select id="sale-salesperson" name="employeeNo" required>
+            <option value="">Loading salespeople...</option>
+          </select>
+        </label>
+      </div>
+      <p id="sale-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button type="button" id="sale-cancel" class="btn btn-secondary">Cancel</button>
+        <button type="submit" id="sale-save" class="btn btn-primary">Create Sale</button>
+      </div>
+    </form>
+  </dialog>
+{% endblock %}

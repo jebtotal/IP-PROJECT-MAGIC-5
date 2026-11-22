@@ -340,6 +340,15 @@ The HOPE schema is split into timestamp-ordered migrations:
 - `20261122000800_s3_dba_07_department_view_access.sql` aligns the department
   SELECT policy with the existing Human Resources module-view right; department
   add/edit/delete continue to use their resource-specific rights.
+- `20261122000900_s4_bld_01_sales_header.sql` adds the Sales list's protected
+  customer/salesperson option RPC and a permission-checked sale-creation RPC.
+  New transaction numbers use an atomic sequence initialized from existing
+  `TR` plus six-digit identifiers; the format is retained and concurrent
+  requests cannot allocate the same number. Only active customers and eligible
+  employees are offered, and the database rechecks those references when it
+  creates the sale. Apply this migration after
+  `20261109000000_hope_app_access.sql`. Sales View is required to load choices
+  and list transactions; Sales Add is additionally required to create a sale.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -535,8 +544,12 @@ Employee, Department, and Job viewing use the Human Resources View right. Apply
 `20261122000800_s3_dba_07_department_view_access.sql` after
 `20261109000000_hope_app_access.sql` so their RLS policies match that view
 permission. If the active view, table access, or policies are unavailable,
-the UI reports that database setup is needed. Sales and Reports currently
-show a Coming soon page.
+the UI reports that database setup is needed. Sales View users can search the
+Sales list; users with Sales Add can create a sale using active Customer and
+Salesperson choices. The transaction number is assigned by the database when
+the header is saved. Apply
+`20261122000900_s4_bld_01_sales_header.sql` before using Sales; Reports still
+shows a Coming soon page.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing
