@@ -18,11 +18,48 @@ let editingRecord = null;
 let searchTimer;
 
 async function request(url, options = {}) {
-  const headers = {"Content-Type": "application/json", ...options.headers};
+  const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    ...options.headers,
+  };
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
   if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
-  const response = await fetch(url, {...options, headers});
-  const result = await response.json();
+  const method = (options.method || "GET").toUpperCase();
+  let response;
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      response = await fetch(url, {...options, headers});
+    } catch (error) {
+      if (method === "GET" && attempt === 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        continue;
+      }
+      throw new Error("The server is temporarily unreachable. Please try again shortly.");
+    }
+    if (
+      method === "GET" &&
+      attempt === 0 &&
+      [502, 503, 504].includes(response.status)
+    ) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
+      continue;
+    }
+    break;
+  }
+  let result;
+  try {
+    result = await response.json();
+  } catch {
+    const redirectedToLogin = response.redirected &&
+      new URL(response.url, window.location.href).pathname === "/login";
+    if (redirectedToLogin) {
+      throw new Error("Your session may have expired. Reload the page and sign in again.");
+    }
+    throw new Error(
+      `The server returned a non-JSON response (HTTP ${response.status}). Try again, and contact an administrator if it continues.`,
+    );
+  }
   if (!response.ok) throw new Error(result.error || "Request could not be completed.");
   return result;
 }
@@ -204,6 +241,16 @@ function buildFields() {
     const label = document.createElement("label");
     label.className = "record-field";
     label.appendChild(document.createTextNode(field.label));
+    const hint = document.createElement("span");
+    hint.className = "record-field-hint";
+    if (field.type === "date" || field.options) {
+      hint.textContent = field.required ? "Required." : "Optional.";
+    } else if (field.required) {
+      hint.textContent = `Required: minimum 1 character; maximum ${field.maxlength}.`;
+    } else {
+      hint.textContent = `Optional: up to ${field.maxlength} characters.`;
+    }
+    label.appendChild(hint);
     let input;
     if (field.options) {
       input = document.createElement("select");
@@ -220,7 +267,10 @@ function buildFields() {
     } else {
       input = document.createElement("input");
       input.type = field.type || "text";
-      if (input.type === "text") input.maxLength = field.maxlength;
+      if (input.type === "text") {
+        input.maxLength = field.maxlength;
+        if (field.required) input.minLength = 1;
+      }
     }
     input.name = field.name;
     input.required = field.required;
