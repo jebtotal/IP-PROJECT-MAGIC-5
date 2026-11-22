@@ -1355,6 +1355,42 @@ def parse_sale_detail(payload):
     }, None
 
 
+def parse_sale_payment(payload):
+    if not isinstance(payload, Mapping) or set(payload) != {"paymentDate", "amount"}:
+        return None, "Enter a payment date and amount."
+    payment_date = payload.get("paymentDate")
+    if not isinstance(payment_date, str):
+        return None, "Enter a valid payment date."
+    try:
+        parsed_date = date.fromisoformat(payment_date)
+    except ValueError:
+        return None, "Enter a valid payment date."
+    if parsed_date.isoformat() != payment_date:
+        return None, "Enter a valid payment date."
+
+    amount = payload.get("amount")
+    if not isinstance(amount, (str, int, float, Decimal)) or isinstance(amount, bool):
+        return None, "Enter a valid payment amount."
+    try:
+        parsed_amount = Decimal(str(amount))
+    except InvalidOperation:
+        return None, "Enter a valid payment amount."
+    if (
+        not parsed_amount.is_finite()
+        or parsed_amount <= 0
+        or parsed_amount.as_tuple().exponent < -2
+        or parsed_amount >= Decimal("100000000")
+    ):
+        return None, (
+            "Payment must be greater than zero, fit within eight integer digits, "
+            "and have at most two decimal places."
+        )
+    return {
+        "payment_date": parsed_date.isoformat(),
+        "amount": format(parsed_amount, "f"),
+    }, None
+
+
 def sales_detail_error_response(error):
     if isinstance(error, APIError):
         if error.code == "42501":
@@ -1369,6 +1405,19 @@ def sales_detail_error_response(error):
         if error.code == "P0002":
             return jsonify(error="The sale or line item is no longer active."), 404
     return record_error_response(error, {"name": "Sales detail"})
+
+
+def sales_payment_error_response(error):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            return jsonify(error="Sales View and Add permissions are required to record a payment."), 403
+        if error.code == "22023":
+            return jsonify(error="Enter a valid payment date and amount for an active sale."), 400
+        if error.code == "P0002":
+            return jsonify(error="The active sale could not be found."), 404
+        if error.code == "P0001" and "receipt number" in str(error).lower():
+            return jsonify(error="A receipt number could not be allocated. Contact an administrator."), 503
+    return record_error_response(error, {"name": "Sales payment"})
 
 
 def record_error_response(error, config):
@@ -2274,6 +2323,62 @@ def api_delete_sale_detail(trans_no, product_code):
     except (APIError, httpx.HTTPError, RuntimeError) as error:
         return sales_detail_error_response(error)
     return jsonify(message="Sale line deleted.")
+
+
+@app.get("/api/sales/<trans_no>/payments")
+def api_sale_payments(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc(
+            "hope_sales_payments_data",
+            {"p_transno": trans_no},
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_payment_error_response(error)
+    if not isinstance(response.data, Mapping):
+        app.logger.error("Sales payment data RPC returned an invalid response")
+        return jsonify(error="Sale payments could not be loaded."), 502
+    return jsonify(response.data)
+
+
+@app.post("/api/sales/<trans_no>/payments")
+def api_add_sale_payment(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "create")
+    if error:
+        return error
+    values, validation_error = parse_sale_payment(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        response = client.rpc(
+            "hope_create_sale_payment",
+            {
+                "p_transno": trans_no,
+                "p_paydate": values["payment_date"],
+                "p_amount": values["amount"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_payment_error_response(error)
+    data = response.data
+    receipt_no = (
+        data[0].get("orno")
+        if isinstance(data, list) and data and isinstance(data[0], Mapping)
+        else data.get("orno")
+        if isinstance(data, Mapping)
+        else data
+        if isinstance(data, str)
+        else None
+    )
+    if not isinstance(receipt_no, str):
+        app.logger.error("Sale payment RPC returned no receipt number")
+        return jsonify(error="Payment could not be recorded."), 502
+    return jsonify(
+        message=f"Payment recorded as {receipt_no}.",
+        receiptNo=receipt_no,
+    ), 201
 
 
 @app.post("/api/records/<module_slug>")

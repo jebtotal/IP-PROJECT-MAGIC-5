@@ -8,7 +8,7 @@
       today: {{ today|tojson }}
     };
   </script>
-  <script src="{{ url_for('static', filename='sales-list.js', v='3') }}" defer></script>
+  <script src="{{ url_for('static', filename='sales-list.js', v='4') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -50,7 +50,7 @@
             <th scope="col">Sale Date</th>
             <th scope="col">Customer</th>
             <th scope="col">Salesperson</th>
-            <th scope="col">Details</th>
+            <th scope="col">Details / Payments</th>
             {% if is_admin %}
               <th scope="col">Status</th>
               <th scope="col">Stamp</th>
@@ -151,6 +151,54 @@
           <tbody id="sale-details-body"></tbody>
         </table>
       </div>
+      <section class="sale-payment-section" aria-labelledby="sale-payments-heading">
+        <div class="sale-payment-heading">
+          <div>
+            <span class="eyebrow">PAYMENT TRACKING</span>
+            <h3 id="sale-payments-heading">Transaction payments</h3>
+          </div>
+          <button type="button" id="sale-payment-add" class="btn btn-primary" hidden>
+            <i class="fa-solid fa-plus" aria-hidden="true"></i> Record Payment
+          </button>
+        </div>
+        <dl class="sale-payment-summary">
+          <div><dt>Total</dt><dd id="sale-payment-total">—</dd></div>
+          <div><dt>Paid</dt><dd id="sale-payment-paid">—</dd></div>
+          <div><dt>Balance</dt><dd id="sale-payment-balance">—</dd></div>
+          <div><dt>Status</dt><dd id="sale-payment-status">—</dd></div>
+        </dl>
+        <p id="sale-payment-message" class="table-message" role="status" aria-live="polite"></p>
+        <div id="sale-payment-form-wrap" hidden>
+          <form id="sale-payment-form" class="form-grid">
+            <label class="record-field">
+              Payment Date
+              <input id="sale-payment-date" name="paymentDate" type="date" required>
+            </label>
+            <label class="record-field">
+              Amount
+              <input id="sale-payment-amount" name="amount" type="number" min="0.01" step="0.01" required>
+            </label>
+            <div class="dialog-actions">
+              <button type="button" id="sale-payment-cancel" class="btn btn-secondary">Cancel</button>
+              <button type="submit" id="sale-payment-save" class="btn btn-primary">Save Payment</button>
+            </div>
+          </form>
+          <p id="sale-payment-form-error" class="form-message" role="alert" aria-live="polite"></p>
+          <p class="dialog-description">Partial and excess payments are recorded as entered.</p>
+        </div>
+        <div class="table-wrap">
+          <table class="management-table record-table">
+            <thead>
+              <tr>
+                <th scope="col">Receipt No</th>
+                <th scope="col">Payment Date</th>
+                <th scope="col">Amount</th>
+              </tr>
+            </thead>
+            <tbody id="sale-payments-body"></tbody>
+          </table>
+        </div>
+      </section>
     </div>
   </dialog>
 {% endblock %}

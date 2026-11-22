@@ -359,6 +359,16 @@ The HOPE schema is split into timestamp-ordered migrations:
   Apply after the Sales header migration, the Sales rights catalogue seed, and
   `20261109000000_hope_app_access.sql` and
   `20261122000500_s2_dba_02_price_as_of.sql`.
+- `20261122001100_s4_bld_03_sales_payments.sql` adds the transaction payment
+  history and payment-recording RPCs. It requires the Sales balance views and
+  HOPE app-access policies. Receipt numbers are assigned atomically in the
+  existing `OR` plus six-digit format. Recording a payment requires Sales View
+  and Sales Add; the existing balance calculation supports partial and excess
+  payments. Payment amount and date are validated, and payment history shows
+  the updated total, paid amount, balance, and receipt list. Apply after
+  `20261122000800_s4_dba_01_02_sales_balance_views.sql`,
+  `20261122000900_s4_bld_01_sales_header.sql`, and
+  `20261122001000_s4_bld_02_sales_details.sql`.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -562,7 +572,9 @@ the header is saved. Apply
 shows a Coming soon page. Apply
 `20261122001000_s4_bld_02_sales_details.sql` to enable Sales line items; the
 separate Sales Details View/Add/Edit/Delete rights govern detail visibility and
-mutations. Assign those rights through User Management.
+mutations. Assign those rights through User Management. Apply
+`20261122001100_s4_bld_03_sales_payments.sql` to enable payment recording
+against active transactions; the Sales Add right controls payment entry.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

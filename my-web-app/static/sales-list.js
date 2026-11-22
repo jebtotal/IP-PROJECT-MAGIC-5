@@ -26,9 +26,24 @@ const saleDetailUnitPrice = document.querySelector("#sale-detail-unit-price");
 const saleDetailFormError = document.querySelector("#sale-detail-form-error");
 const saleDetailSave = document.querySelector("#sale-detail-save");
 const saleDetailCancel = document.querySelector("#sale-detail-cancel");
+const salePaymentAdd = document.querySelector("#sale-payment-add");
+const salePaymentFormWrap = document.querySelector("#sale-payment-form-wrap");
+const salePaymentForm = document.querySelector("#sale-payment-form");
+const salePaymentDate = document.querySelector("#sale-payment-date");
+const salePaymentAmount = document.querySelector("#sale-payment-amount");
+const salePaymentSave = document.querySelector("#sale-payment-save");
+const salePaymentFormError = document.querySelector("#sale-payment-form-error");
+const salePaymentMessage = document.querySelector("#sale-payment-message");
+const salePaymentsBody = document.querySelector("#sale-payments-body");
+const salePaymentTotal = document.querySelector("#sale-payment-total");
+const salePaymentPaid = document.querySelector("#sale-payment-paid");
+const salePaymentBalance = document.querySelector("#sale-payment-balance");
+const salePaymentStatus = document.querySelector("#sale-payment-status");
 let currentStatus = "active";
 let currentActions = {create: false};
 let currentSaleDetails = null;
+let currentSalePayments = null;
+let currentTransactionNo = null;
 let editingProductCode = null;
 let searchTimer;
 
@@ -85,12 +100,12 @@ function renderSales(records, detailActions) {
       "Salesperson",
     );
     const detailsCell = addCell(row, "", "Details");
-    if (detailActions?.view && !record.isDeleted) {
+    if (!record.isDeleted) {
       const detailsButton = document.createElement("button");
       detailsButton.type = "button";
       detailsButton.className = "btn btn-secondary sales-detail-open";
       detailsButton.dataset.transactionNo = record.transNo;
-      detailsButton.textContent = "Line items";
+      detailsButton.textContent = detailActions?.view ? "Details / payments" : "Payments";
       detailsCell.appendChild(detailsButton);
     } else {
       detailsCell.textContent = "—";
@@ -258,28 +273,73 @@ function renderSaleDetails() {
   resetSaleDetailForm();
 }
 
+function renderSalePayments() {
+  const data = currentSalePayments;
+  if (!data) return;
+  salePaymentTotal.textContent = formatPrice(data.totalAmount);
+  salePaymentPaid.textContent = formatPrice(data.totalPaid);
+  salePaymentBalance.textContent = formatPrice(data.balance);
+  salePaymentStatus.textContent = data.status || "—";
+  salePaymentAdd.hidden = !data.actions.add;
+  salePaymentFormWrap.hidden = true;
+  salePaymentFormError.textContent = "";
+  salePaymentsBody.replaceChildren();
+  for (const payment of data.payments) {
+    const row = document.createElement("tr");
+    addCell(row, payment.receiptNo, "Receipt No");
+    addCell(row, payment.paymentDate, "Payment Date");
+    addCell(row, formatPrice(payment.amount), "Amount");
+    salePaymentsBody.appendChild(row);
+  }
+  salePaymentMessage.textContent = data.payments.length
+    ? ""
+    : "No payments have been recorded for this transaction.";
+}
+
 async function openSaleDetails(transactionNo) {
+  currentTransactionNo = transactionNo;
   currentSaleDetails = null;
+  currentSalePayments = null;
   saleDetailsTitle.textContent = `Sale ${transactionNo} line items`;
   saleDetailsDate.textContent = "";
   saleDetailsMessage.textContent = "Loading line items...";
   saleDetailsBody.replaceChildren();
   saleDetailAdd.hidden = true;
   saleDetailFormWrap.hidden = true;
+  salePaymentTotal.textContent = "—";
+  salePaymentPaid.textContent = "—";
+  salePaymentBalance.textContent = "—";
+  salePaymentStatus.textContent = "—";
+  salePaymentMessage.textContent = "Loading payments...";
+  salePaymentAdd.hidden = true;
+  salePaymentFormWrap.hidden = true;
+  salePaymentsBody.replaceChildren();
   if (!saleDetailsDialog.open) saleDetailsDialog.showModal();
-  try {
-    currentSaleDetails = await request(
-      `/api/sales/${encodeURIComponent(transactionNo)}/details`,
-    );
+  const encodedTransactionNo = encodeURIComponent(transactionNo);
+  const [detailsResult, paymentsResult] = await Promise.allSettled([
+    request(`/api/sales/${encodedTransactionNo}/details`),
+    request(`/api/sales/${encodedTransactionNo}/payments`),
+  ]);
+  if (currentTransactionNo !== transactionNo) return;
+  if (detailsResult.status === "fulfilled") {
+    currentSaleDetails = detailsResult.value;
     saleDetailsDate.textContent = `Sale date: ${currentSaleDetails.salesDate}`;
     saleDetailsMessage.textContent = currentSaleDetails.details.length
       ? ""
       : "This sale has no line items yet.";
     renderSaleDetails();
-  } catch (error) {
-    saleDetailsMessage.textContent = error instanceof Error
-      ? error.message
+  } else {
+    saleDetailsMessage.textContent = detailsResult.reason instanceof Error
+      ? detailsResult.reason.message
       : "Sale details could not be loaded.";
+  }
+  if (paymentsResult.status === "fulfilled") {
+    currentSalePayments = paymentsResult.value;
+    renderSalePayments();
+  } else {
+    salePaymentMessage.textContent = paymentsResult.reason instanceof Error
+      ? paymentsResult.reason.message
+      : "Sale payments could not be loaded.";
   }
 }
 
@@ -326,6 +386,34 @@ async function saveSaleDetail(event) {
       : "Sale line could not be saved.";
   } finally {
     saleDetailSave.disabled = false;
+  }
+}
+
+async function saveSalePayment(event) {
+  event.preventDefault();
+  if (!currentSalePayments?.actions.add || !currentTransactionNo) return;
+  salePaymentFormError.textContent = "";
+  salePaymentSave.disabled = true;
+  try {
+    const result = await request(
+      `/api/sales/${encodeURIComponent(currentTransactionNo)}/payments`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          paymentDate: salePaymentDate.value,
+          amount: salePaymentAmount.value,
+        }),
+      },
+    );
+    showToast(result.message);
+    await openSaleDetails(currentTransactionNo);
+    await loadSales();
+  } catch (error) {
+    salePaymentFormError.textContent = error instanceof Error
+      ? error.message
+      : "Payment could not be recorded.";
+  } finally {
+    salePaymentSave.disabled = false;
   }
 }
 
@@ -376,7 +464,27 @@ saleDetailCancel.addEventListener("click", () => {
   resetSaleDetailForm();
 });
 document.querySelectorAll('[data-dialog-close="sale-details-dialog"]').forEach((button) => {
-  button.addEventListener("click", () => saleDetailsDialog.close());
+  button.addEventListener("click", () => {
+    currentTransactionNo = null;
+    saleDetailsDialog.close();
+  });
+});
+saleDetailsDialog.addEventListener("close", () => {
+  currentTransactionNo = null;
+});
+salePaymentAdd.addEventListener("click", () => {
+  if (!currentSalePayments?.actions.add) return;
+  salePaymentForm.reset();
+  salePaymentDate.value = config.today;
+  salePaymentFormError.textContent = "";
+  salePaymentFormWrap.hidden = false;
+  salePaymentDate.focus();
+});
+salePaymentForm.addEventListener("submit", saveSalePayment);
+document.querySelector("#sale-payment-cancel").addEventListener("click", () => {
+  salePaymentFormWrap.hidden = true;
+  salePaymentForm.reset();
+  salePaymentFormError.textContent = "";
 });
 saleDetailsBody.addEventListener("click", async (event) => {
   const editButton = event.target.closest("[data-edit-product]");
