@@ -6,7 +6,7 @@
     window.isSuperadmin = {{ "true" if is_superadmin else "false" }};
     window.isAdmin = {{ "true" if profile.role == "admin" else "false" }};
   </script>
-  <script src="{{ url_for('static', filename='user-management.js', v='3') }}" defer></script>
+  <script src="{{ url_for('static', filename='user-management.js', v='4') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -16,9 +16,9 @@
       <h2>User Management</h2>
       <p>
         {% if is_superadmin %}
-          Approve users and designate administrators. Superadmin accounts are protected.
+          Approve users and designate administrators. Only Superadmins can see Superadmin accounts; the last Superadmin cannot be removed, and the last active Superadmin cannot be blocked.
         {% else %}
-          Manage user accounts. Superadmin accounts are not shown.
+          Manage regular user accounts. Superadmin accounts are not shown.
         {% endif %}
       </p>
     </div>
@@ -27,7 +27,7 @@
   <div class="management-grid">
     <section class="management-panel glass-panel" aria-labelledby="add-user-heading">
       <h3 id="add-user-heading" class="panel-heading">Add User</h3>
-      <p class="panel-description">Create an approved account with a temporary password.</p>
+      <p class="panel-description">Create an approved account with a temporary password. The user must set a new password at first login.</p>
       <form id="add-user-form" class="form-grid">
         <label>
           Full name
@@ -48,15 +48,29 @@
 
     <section class="management-panel glass-panel" aria-labelledby="users-heading">
       <h3 id="users-heading" class="panel-heading">Users</h3>
+      <div class="record-toolbar">
+        <label class="record-search">
+          <span class="sr-only">Search users</span>
+          <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+          <input id="user-search" type="search" placeholder="Search users..." autocomplete="off">
+        </label>
+      </div>
+      <div id="user-tabs" class="record-tabs" role="tablist" aria-label="User status filter">
+        <button type="button" class="record-tab is-active" role="tab" aria-selected="true" data-status="active">Active <span data-count="active">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="inactive">Inactive <span data-count="inactive">0</span></button>
+        <button type="button" class="record-tab" role="tab" aria-selected="false" data-status="all">All <span data-count="all">0</span></button>
+      </div>
       <p id="users-message" class="table-message" role="status" aria-live="polite"></p>
-      <div class="table-wrap" aria-label="Users table">
-        <table class="management-table">
+      <div class="table-wrap user-table-wrap" aria-label="Users table">
+        <table class="management-table user-management-table">
           <thead>
             <tr>
               <th scope="col">Name</th>
               <th scope="col">Email</th>
               <th scope="col">Role</th>
+              <th scope="col">Account Status</th>
               <th scope="col">Status</th>
+              <th scope="col">Stamp</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
