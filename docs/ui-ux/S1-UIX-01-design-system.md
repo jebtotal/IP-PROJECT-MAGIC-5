@@ -217,3 +217,18 @@ New components and UI patterns implemented in Sprint 2 based on the S2 usability
 - **"Coming soon" state:** Grayed-out pill button with `opacity-50`/`dark:opacity-50` and `not-allowed` cursor, displaying "Coming soon" text. Used for modules/features not yet built. Accompanied by `coming-soon` caption text using `text-[10px] font-bold uppercase tracking-wider` with `gray-400`/`dark:gray-500` color. Light/dark: `gray-400` on light, `gray-500` on dark.
 
 All new components follow the existing design-system tokens: DM Sans typography, remapped Tailwind color palette (`brand` = emerald, `indigo` = terracotta, `sky` = warm orange, `slate` = warm stone/charcoal), paired light/dark treatments using the `.dark` class on `<html>`, and consistent spacing/radii from the reference (rounded-xl for inputs, rounded-full for pills/badges, `p-6`/`p-7`/`p-8` padding rhythm).
+## 12. v1.2 Changelog (Sprint 3)
+
+New components and UI patterns implemented in Sprint 3 based on the S3 usability review and mockups:
+
+- **Job timeline:** Visual timeline rendering employee job history with stacked role badges and duration labels; `space-y-2` vertical rhythm, `font-sm` text, `brand-500/10` separators between steps, dark mode uses `slate-300` 10% opacity separators.
+
+- **HR tab bar:** Compact pill tabs for HR section navigation (`Job History`, `Employee Info`, `Payroll`) with `gap-0.35rem`, `padding 0.45rem 0.8rem`, `font-size 0.68rem`, `font-weight 800`; selected tab uses solid `brand-600` with white text, inactive tabs use `gray-200`/`dark:bg-slate-800/10` fill with muted text; light/dark variants follow the established tab pill pattern.
+
+- **Separated badge:** Standalone badge component with `inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider`; uses `brand-500`/`amber-500`/`emerald-500`/`red-500` text with respective `/10` tint background; light/dark: tint background swaps between theme surfaces with contrasting text color.
+
+- **Masked-salary pattern:** Input field displaying masked salary (e.g., `*****12,345`) with `password` type visibility toggle; right eye icon reveals actual value `text-[11px] font-medium text-gray-700 dark:text-gray-300`; input uses `rounded-xl`, `py-2.5`, `pl-10`, and `bg-white`/`dark:bg-slate-950/50`; masked value appears with `text-gray-500/50` placeholder style in light and `slate-400/30` in dark.
+
+- **Profile layout:** Two-column profile view with avatar and name on left (`w-1/2 md:w-1/3`), and stats/address on right (`w-1/2 md:w-2/3`); avatar uses `rounded-full w-20 h-20`, stats grid is `grid grid-cols-2 gap-4 text-sm`; light mode uses `--text-main`, dark mode uses `--text-muted` for secondary stats.
+
+Light and dark values follow the design-system token set: `--bg-main`/`--bg-surface`/`--bg-card`, `--border-color`/`--text-main`/`--text-muted`, and semantic colors (`brand-500`/`brand-600`/`emerald-500`/`amber-500`/`red-500`) with their dark-mode variants via the `.dark` class on `<html>`.
