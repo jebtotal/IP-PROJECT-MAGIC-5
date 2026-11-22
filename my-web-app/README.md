@@ -349,6 +349,16 @@ The HOPE schema is split into timestamp-ordered migrations:
   creates the sale. Apply this migration after
   `20261109000000_hope_app_access.sql`. Sales View is required to load choices
   and list transactions; Sales Add is additionally required to create a sale.
+- `20261122001000_s4_bld_02_sales_details.sql` adds the protected Sales Details
+  read and line-item add/edit/soft-delete operations. Mutations require the
+  matching Sales Details Add/Edit/Delete right and an active sale/product.
+  Products without a non-deleted price effective on the sale date are excluded
+  from selection. The displayed unit price and line total use
+  `price_as_of(product, salesdate)`, matching the Sales balance views; the
+  existing `salesdetail` schema does not store a separate price snapshot.
+  Apply after the Sales header migration, the Sales rights catalogue seed, and
+  `20261109000000_hope_app_access.sql` and
+  `20261122000500_s2_dba_02_price_as_of.sql`.
 
 Confirm the target project and review existing HOPE relations before applying
 SQL. On a project with the application's different `audit_log` table, run
@@ -549,7 +559,10 @@ Sales list; users with Sales Add can create a sale using active Customer and
 Salesperson choices. The transaction number is assigned by the database when
 the header is saved. Apply
 `20261122000900_s4_bld_01_sales_header.sql` before using Sales; Reports still
-shows a Coming soon page.
+shows a Coming soon page. Apply
+`20261122001000_s4_bld_02_sales_details.sql` to enable Sales line items; the
+separate Sales Details View/Add/Edit/Delete rights govern detail visibility and
+mutations. Assign those rights through User Management.
 
 The new `blocked` column is not yet consulted by the login handler; existing
 `status` checks remain in effect. The access-control migration leaves existing

@@ -1321,6 +1321,56 @@ def parse_sale_header(payload):
     }, None
 
 
+def parse_sale_detail(payload):
+    expected_fields = {"productCode", "quantity"}
+    if not isinstance(payload, Mapping) or set(payload) != expected_fields:
+        return None, "Enter a product and quantity."
+    product_code = payload.get("productCode")
+    if (
+        not isinstance(product_code, str)
+        or not product_code.strip()
+        or len(product_code.strip()) > 6
+    ):
+        return None, "Choose a valid product."
+    quantity = payload.get("quantity")
+    if not isinstance(quantity, (str, int, float, Decimal)) or isinstance(quantity, bool):
+        return None, "Enter a valid quantity."
+    try:
+        parsed_quantity = Decimal(str(quantity))
+    except InvalidOperation:
+        return None, "Enter a valid quantity."
+    if (
+        not parsed_quantity.is_finite()
+        or parsed_quantity <= 0
+        or parsed_quantity.as_tuple().exponent < -2
+        or parsed_quantity >= Decimal("100000000")
+    ):
+        return None, (
+            "Quantity must be greater than zero, fit within eight integer digits, "
+            "and have at most two decimal places."
+        )
+    return {
+        "product_code": product_code.strip(),
+        "quantity": format(parsed_quantity, "f"),
+    }, None
+
+
+def sales_detail_error_response(error):
+    if isinstance(error, APIError):
+        if error.code == "42501":
+            return jsonify(error="You do not have permission for this Sales Detail action."), 403
+        if error.code == "22023":
+            message = str(error).lower()
+            if "price" in message:
+                return jsonify(error="No active price is available for this product on the sale date."), 400
+            return jsonify(error="Choose an active product and enter a valid quantity."), 400
+        if error.code == "23505":
+            return jsonify(error="This product is already on the sale. Edit its existing line instead."), 409
+        if error.code == "P0002":
+            return jsonify(error="The sale or line item is no longer active."), 404
+    return record_error_response(error, {"name": "Sales detail"})
+
+
 def record_error_response(error, config):
     app.logger.exception("Record request could not be completed")
     if isinstance(error, (APIError, RuntimeError)):
@@ -2094,6 +2144,7 @@ def api_list_sales():
             "create": actions["create"],
             "edit": False,
             "delete": False,
+            "saleDetails": options.get("saleDetailActions"),
         },
     )
 
@@ -2142,6 +2193,87 @@ def api_create_sale():
         message=f"Sale {transaction_no} created.",
         transactionNo=transaction_no,
     ), 201
+
+
+@app.get("/api/sales/<trans_no>/details")
+def api_sale_details(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        response = client.rpc(
+            "hope_sales_details_data",
+            {"p_transno": trans_no},
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    if not isinstance(response.data, Mapping):
+        app.logger.error("Sales detail data RPC returned an invalid response")
+        return jsonify(error="Sale details could not be loaded."), 502
+    return jsonify(response.data)
+
+
+@app.post("/api/sales/<trans_no>/details")
+def api_add_sale_detail(trans_no):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    values, validation_error = parse_sale_detail(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        client.rpc(
+            "hope_add_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_product_code": values["product_code"],
+                "p_quantity": values["quantity"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line added."), 201
+
+
+@app.patch("/api/sales/<trans_no>/details/<product_code>")
+def api_edit_sale_detail(trans_no, product_code):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    values, validation_error = parse_sale_detail(get_user_payload())
+    if validation_error:
+        return jsonify(error=validation_error), 400
+    try:
+        client.rpc(
+            "hope_edit_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_old_product_code": product_code,
+                "p_product_code": values["product_code"],
+                "p_quantity": values["quantity"],
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line updated.")
+
+
+@app.delete("/api/sales/<trans_no>/details/<product_code>")
+def api_delete_sale_detail(trans_no, product_code):
+    client, _profile, _config, _actions, error = get_record_access("sales", "view")
+    if error:
+        return error
+    try:
+        client.rpc(
+            "hope_delete_sale_detail",
+            {
+                "p_transno": trans_no,
+                "p_product_code": product_code,
+            },
+        ).execute()
+    except (APIError, httpx.HTTPError, RuntimeError) as error:
+        return sales_detail_error_response(error)
+    return jsonify(message="Sale line deleted.")
 
 
 @app.post("/api/records/<module_slug>")

@@ -8,7 +8,7 @@
       today: {{ today|tojson }}
     };
   </script>
-  <script src="{{ url_for('static', filename='sales-list.js', v='1') }}" defer></script>
+  <script src="{{ url_for('static', filename='sales-list.js', v='3') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -50,6 +50,7 @@
             <th scope="col">Sale Date</th>
             <th scope="col">Customer</th>
             <th scope="col">Salesperson</th>
+            <th scope="col">Details</th>
             {% if is_admin %}
               <th scope="col">Status</th>
               <th scope="col">Stamp</th>
@@ -97,5 +98,59 @@
         <button type="submit" id="sale-save" class="btn btn-primary">Create Sale</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="sale-details-dialog" class="app-dialog" aria-labelledby="sale-details-title">
+    <div class="dialog-body">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">SALE DETAILS</span>
+          <h2 id="sale-details-title" class="dialog-title">Sale line items</h2>
+          <p id="sale-details-date" class="dialog-description"></p>
+        </div>
+        <button type="button" class="icon-button" data-dialog-close="sale-details-dialog" aria-label="Close dialog">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="sale-details-message" class="table-message" role="status" aria-live="polite"></p>
+      <button type="button" id="sale-detail-add" class="btn btn-primary" hidden>
+        <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Line Item
+      </button>
+      <div id="sale-detail-form-wrap" hidden>
+        <form id="sale-detail-form" class="form-grid">
+          <label class="record-field">
+            Product
+            <select id="sale-detail-product" name="productCode" required></select>
+          </label>
+          <label class="record-field">
+            Quantity
+            <input id="sale-detail-quantity" name="quantity" type="number" min="0.01" step="0.01" required>
+          </label>
+          <label class="record-field">
+            Unit Price (as of sale date)
+            <output id="sale-detail-unit-price" class="record-field-output">—</output>
+          </label>
+          <div class="dialog-actions">
+            <button type="button" id="sale-detail-cancel" class="btn btn-secondary" hidden>Cancel Edit</button>
+            <button type="submit" id="sale-detail-save" class="btn btn-primary">Add Line</button>
+          </div>
+        </form>
+        <p id="sale-detail-form-error" class="form-message" role="alert" aria-live="polite"></p>
+      </div>
+      <div class="table-wrap">
+        <table class="management-table record-table">
+          <thead>
+            <tr>
+              <th scope="col">Product</th>
+              <th scope="col">Quantity</th>
+              <th scope="col">Unit Price</th>
+              <th scope="col">Line Total</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="sale-details-body"></tbody>
+        </table>
+      </div>
+    </div>
   </dialog>
 {% endblock %}
