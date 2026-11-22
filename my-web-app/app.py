@@ -134,50 +134,6 @@ MODULE_SLUGS = {
     "Sales": "sales",
     "Reports": "reports",
 }
-REPORTS = {
-    "products_master": {
-        "right": "reports.productsMaster.view",
-        "resource": "products_master",
-        "name": "Product Master List",
-        "filters": (),
-    },
-    "active_employees": {
-        "right": "reports.activeEmployees.view",
-        "resource": "active_employees",
-        "name": "Active Employees",
-        "filters": (),
-    },
-    "all_employees": {
-        "right": "reports.allEmployees.view",
-        "resource": "all_employees",
-        "name": "All Employees",
-        "filters": (),
-    },
-    "employee_job_history": {
-        "right": "reports.employeeJobHistory.view",
-        "resource": "employee_job_history",
-        "name": "Employee Job History",
-        "filters": ("employee",),
-    },
-    "top_customers": {
-        "right": "reports.topCustomers.view",
-        "resource": "top_customers",
-        "name": "Top Customers",
-        "filters": ("date_range", "top_n"),
-    },
-    "top_products": {
-        "right": "reports.topProducts.view",
-        "resource": "top_products",
-        "name": "Top Products",
-        "filters": ("date_range", "top_n"),
-    },
-    "top_sales": {
-        "right": "reports.topSales.view",
-        "resource": "top_sales",
-        "name": "Top Sales",
-        "filters": ("date_range", "top_n"),
-    },
-}
 WORKSPACE_MODULES = (
     {
         "name": "Customer",
@@ -1788,83 +1744,6 @@ def sales_status_error_response(error, action):
     return record_error_response(error, {"name": "Sales"})
 
 
-def get_report_rights(client, profile):
-    if profile["role"] in {"admin", "superadmin"}:
-        return list(REPORTS)
-    right_codes = [report["right"] for report in REPORTS.values()]
-    assignments = (
-        client.table("user_permission")
-        .select("right_code")
-        .eq("user_id", profile["id"])
-        .eq("is_deleted", False)
-        .in_("right_code", right_codes)
-        .execute()
-    )
-    granted = {row["right_code"] for row in assignments.data or []}
-    return [
-        slug for slug, report in REPORTS.items()
-        if report["right"] in granted
-    ]
-
-
-def parse_report_filters(report_slug, query):
-    filters = {"start_date": None, "end_date": None, "top_n": 10, "employee_no": None}
-    report = REPORTS[report_slug]
-    if "date_range" in report["filters"]:
-        start_value = query.get("startDate")
-        end_value = query.get("endDate")
-        try:
-            start_date = date.fromisoformat(start_value or "")
-            end_date = date.fromisoformat(end_value or "")
-        except ValueError:
-            return None, "Enter a valid start and end date."
-        if start_date.isoformat() != start_value or end_date.isoformat() != end_value:
-            return None, "Enter a valid start and end date."
-        if end_date < start_date:
-            return None, "End date must be on or after the start date."
-        filters["start_date"] = start_date.isoformat()
-        filters["end_date"] = end_date.isoformat()
-        raw_top_n = query.get("topN", "10")
-        if not raw_top_n.isdecimal():
-            return None, "Top N must be a whole number between 1 and 100."
-        top_n = int(raw_top_n)
-        if not 1 <= top_n <= 100:
-            return None, "Top N must be a whole number between 1 and 100."
-        filters["top_n"] = top_n
-    if "employee" in report["filters"]:
-        employee_no = query.get("employeeNo", "").strip()
-        if len(employee_no) > 5:
-            return None, "Choose a valid employee."
-        filters["employee_no"] = employee_no or None
-    return filters, None
-
-
-def get_report_access(report_slug):
-    client = get_authenticated_client()
-    if client is None:
-        return None, None, None, (jsonify(error="You must be logged in."), 401)
-    profile = get_current_profile(client)
-    if not profile_is_active(profile):
-        return None, None, None, (jsonify(error="This account is not active."), 403)
-    report = REPORTS.get(report_slug)
-    if report is None:
-        return None, None, None, (jsonify(error="Unknown report."), 404)
-    try:
-        permissions = get_permissions_for_user(client, profile)
-        if not has_permission(permissions, "Reports", "view"):
-            return None, None, None, (jsonify(error="Reports View access is required."), 403)
-        granted_reports = get_report_rights(client, profile)
-    except (APIError, httpx.HTTPError, RuntimeError, KeyError, TypeError):
-        app.logger.exception("Report permissions could not be loaded")
-        return None, None, None, (
-            jsonify(error="Report permissions need database setup or could not be checked."),
-            503,
-        )
-    if report_slug not in granted_reports:
-        return None, None, None, (jsonify(error="You do not have permission to view this report."), 403)
-    return client, profile, report, None
-
-
 def record_error_response(error, config):
     app.logger.exception("Record request could not be completed")
     if isinstance(error, APIError):
@@ -2583,7 +2462,6 @@ def api_sales_options():
     )
 
 
-@app.get("/api/reports/<report_slug>")
 def api_run_report(report_slug):
     client, _profile, _report, error = get_report_access(report_slug)
     if error:
@@ -2621,7 +2499,6 @@ def api_run_report(report_slug):
     )
 
 
-@app.get("/api/sales")
 def api_list_sales():
     client, profile, config, actions, error = get_record_access("sales", "view")
     if error:
@@ -2734,7 +2611,6 @@ def api_list_sales():
     )
 
 
-@app.patch("/api/sales/<trans_no>/delete")
 def api_delete_sale(trans_no):
     client, _profile, _config, _actions, error = get_record_access("sales", "delete")
     if error:
@@ -2749,7 +2625,6 @@ def api_delete_sale(trans_no):
     return jsonify(message=f"Sale {trans_no} moved to Inactive.")
 
 
-@app.patch("/api/sales/<trans_no>/restore")
 def api_restore_sale(trans_no):
     client, profile, _config, _actions, error = get_record_access("sales", "delete")
     if error:
@@ -2766,7 +2641,6 @@ def api_restore_sale(trans_no):
     return jsonify(message=f"Sale {trans_no} restored.")
 
 
-@app.post("/api/sales")
 def api_create_sale():
     client, _profile, _config, _actions, error = get_record_access("sales", "create")
     if error:
@@ -2812,7 +2686,6 @@ def api_create_sale():
     ), 201
 
 
-@app.get("/api/sales/<trans_no>/details")
 def api_sale_details(trans_no):
     client, _profile, _config, _actions, error = get_record_access("sales", "view")
     if error:
@@ -2830,7 +2703,6 @@ def api_sale_details(trans_no):
     return jsonify(response.data)
 
 
-@app.post("/api/sales/<trans_no>/details")
 def api_add_sale_detail(trans_no):
     client, _profile, _config, _actions, error = get_record_access("sales", "view")
     if error:
@@ -2852,7 +2724,6 @@ def api_add_sale_detail(trans_no):
     return jsonify(message="Sale line added."), 201
 
 
-@app.patch("/api/sales/<trans_no>/details/<product_code>")
 def api_edit_sale_detail(trans_no, product_code):
     client, _profile, _config, _actions, error = get_record_access("sales", "view")
     if error:
@@ -2875,7 +2746,6 @@ def api_edit_sale_detail(trans_no, product_code):
     return jsonify(message="Sale line updated.")
 
 
-@app.delete("/api/sales/<trans_no>/details/<product_code>")
 def api_delete_sale_detail(trans_no, product_code):
     client, _profile, _config, _actions, error = get_record_access("sales", "view")
     if error:
@@ -2893,7 +2763,6 @@ def api_delete_sale_detail(trans_no, product_code):
     return jsonify(message="Sale line deleted.")
 
 
-@app.get("/api/sales/<trans_no>/payments")
 def api_sale_payments(trans_no):
     client, _profile, _config, _actions, error = get_record_access("sales", "view")
     if error:
@@ -2911,7 +2780,6 @@ def api_sale_payments(trans_no):
     return jsonify(response.data)
 
 
-@app.post("/api/sales/<trans_no>/payments")
 def api_add_sale_payment(trans_no):
     client, _profile, _config, _actions, error = get_record_access("sales", "create")
     if error:
